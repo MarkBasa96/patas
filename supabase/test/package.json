@@ -1,0 +1,12 @@
+{
+  "name": "patas-db-test",
+  "private": true,
+  "type": "module",
+  "description": "Runs supabase/schema.sql and the privacy test in an in-memory Postgres (PGlite). No cloud.",
+  "scripts": {
+    "test": "node run-local.mjs"
+  },
+  "dependencies": {
+    "@electric-sql/pglite": "0.5.8"
+  }
+}

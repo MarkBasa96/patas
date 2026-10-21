@@ -1,0 +1,8 @@
+[{
+      "relation": ["delegate_permission/common.handle_all_urls"],
+      "target": {
+        "namespace": "android_app",
+        "package_name": "com.joemarkbasa.patas",
+        "sha256_cert_fingerprints": ["23:DE:52:A7:6A:D3:7D:EA:E7:D8:F0:5C:A0:E8:08:31:EA:45:7A:CB:5A:F2:54:05:37:FC:EA:A9:6A:E2:1D:F1"]
+      }
+    }]

@@ -1,0 +1,27 @@
+# private notes and secrets
+CLAUDE.local.md
+.env
+.env.*
+!.env.example
+*.keystore
+
+# owner data: never commit
+/import/
+exports/
+*.xlsx
+*.csv
+qr/
+
+# build and deps
+node_modules/
+dist/
+web-build/
+.expo/
+.vercel/
+
+# owner logo: stays on the owner's PC, never in the public repo (decision 2026-10-17)
+docs/mockups-v3/logo-192.png
+docs/mockups-v3/logo.js
+
+# copied from node_modules by scripts/copy-wasm.mjs before each build
+app/public/zxing_reader.wasm

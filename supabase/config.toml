@@ -1,0 +1,11 @@
+# Supabase settings that live with the code (Kenshin audit L-5). Only what Patas changes from the defaults.
+project_id = "patas"
+
+# The reminder sender checks its own callers: the 15-minute schedule with the cron secret (in Vault),
+# a signed-in person with their own token. So the gateway's JWT check is off for it.
+[functions.send-reminders]
+verify_jwt = false
+
+# delete-account keeps the default gateway check (a signed-in person's token is required anyway).
+[functions.delete-account]
+verify_jwt = true

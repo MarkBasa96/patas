@@ -1,0 +1,17 @@
+{
+  "expo": {
+    "name": "Patas",
+    "slug": "patas",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "automatic",
+    "web": {
+      "bundler": "metro",
+      "output": "single",
+      "name": "Patas",
+      "shortName": "Patas",
+      "themeColor": "#364C8C",
+      "favicon": "./public/icon-192.png"
+    }
+  }
+}

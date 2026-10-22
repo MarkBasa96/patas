@@ -1,5 +1,7 @@
 <div align="center">
 
+<img src="app/public/icon-512.png" alt="Patas app icon: a white letter P on an ink-blue rounded square" width="112" height="112" />
+
 # Patas
 
 **Who you owe, what is left, and what is due next.**

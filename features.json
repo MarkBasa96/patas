@@ -30,7 +30,7 @@
     { "id": "F27", "phase": "4", "description": "Importer dry run reproduces every reference figure and lists unmapped items (runs locally, read-only)", "steps": ["run dry run", "compare to reference table", "print unmapped list"], "passes": true },
     { "id": "F28", "phase": "7", "description": "Real import reconciles with zero unexplained differences; re-run creates no duplicates", "steps": ["import", "reconcile", "re-run import, row counts unchanged"], "passes": true },
     { "id": "F29", "phase": "8", "description": "Phone's Back button, small screens, long names and offline cold start all behave", "steps": ["back-button scenario", "320px width", "40-char names", "airplane-mode cold start"], "passes": false },
-    { "id": "F30", "phase": "9", "description": "Fresh clone builds from the README; secret and personal-data scan clean", "steps": ["clone to empty folder", "follow README", "run scanners"], "passes": false },
+    { "id": "F30", "phase": "9", "description": "Fresh clone builds from the README; secret and personal-data scan clean", "steps": ["clone to empty folder", "follow README", "run scanners"], "passes": true },
     { "id": "F31", "phase": "all", "description": "End-to-end check in SPEC.md section 14 passes all ten steps", "steps": ["run SPEC 14 steps 1-10"], "passes": true }
   ]
 }

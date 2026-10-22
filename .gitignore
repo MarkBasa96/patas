@@ -19,7 +19,7 @@ web-build/
 .expo/
 .vercel/
 
-# owner logo: stays on the owner's PC, never in the public repo (decision 2026-10-17)
+# old mockup copies of the logo (the logo itself is public since 2026-10-22: app/assets/brand/patas-logo.png)
 docs/mockups-v3/logo-192.png
 docs/mockups-v3/logo.js
 

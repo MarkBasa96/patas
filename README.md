@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="app/public/icon-512.png" alt="Patas app icon: a white letter P on an ink-blue rounded square" width="112" height="112" />
+<img src="app/assets/brand/patas-logo.png" alt="Patas logo: a smiling girl peeking out of a purple wallet" width="160" height="160" />
 
 # Patas
 
@@ -10,7 +10,7 @@ A free debt and installment tracker for people in the Philippines. Put your GCas
 SPay Later, bank and salary loans, LTO or SSS/Pag-IBIG loans, and money borrowed from family or friends in one
 place. It works offline, reminds you without naming anyone, and keeps your payment QR codes safe.
 
-**[Open the live app →](https://patas-fawn.vercel.app)** · **[Download for Android (APK) →](https://github.com/MarkBasa96/patas/releases/latest/download/Patas-1.0.0.apk)**
+**[Open the live app →](https://patas-fawn.vercel.app)** · **[Download for Android (APK) →](https://github.com/MarkBasa96/patas/releases/latest/download/Patas-1.0.1.apk)**
 
 <sub>iPhone: open the live app in Safari → Share → Add to Home Screen.</sub>
 

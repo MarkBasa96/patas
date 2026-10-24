@@ -10,7 +10,7 @@ A free debt and installment tracker for people in the Philippines. Put your GCas
 SPay Later, bank and salary loans, LTO or SSS/Pag-IBIG loans, and money borrowed from family or friends in one
 place. It works offline, reminds you without naming anyone, and keeps your payment QR codes safe.
 
-**[Open the live app →](https://patas-fawn.vercel.app)** · **[Download for Android (APK) →](https://github.com/MarkBasa96/patas/releases/latest/download/Patas-1.0.1.apk)**
+**[Open the live app →](https://patas-fawn.vercel.app)** · **[Download for Android (APK) →](https://github.com/MarkBasa96/patas/releases/latest/download/Patas-1.0.2.apk)**
 
 <sub>iPhone: open the live app in Safari → Share → Add to Home Screen.</sub>
 

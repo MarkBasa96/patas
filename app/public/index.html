@@ -10,8 +10,10 @@
          shown from blob: URLs; the QR decoder needs WebAssembly. No eval, no plugins, no outside images. -->
     <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval' https://challenges.cloudflare.com; style-src 'self' 'unsafe-inline'; img-src 'self' blob: data:; font-src 'self' data:; connect-src 'self' https://*.supabase.co wss://*.supabase.co https://challenges.cloudflare.com https://open.er-api.com https://api.frankfurter.dev; frame-src https://challenges.cloudflare.com; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'" />
     <link rel="manifest" href="/manifest.json" />
-    <link rel="icon" type="image/png" href="/icon-192.png" />
-    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <!-- ?v=: a new address makes browsers drop a cached old icon (Chrome kept the old "P"). Bump it when icons change. -->
+    <link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png?v=r4" />
+    <link rel="icon" sizes="48x48" href="/favicon.ico?v=r4" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png?v=r4" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-title" content="Patas" />

@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="app/assets/brand/patas-logo.png" alt="Patas logo: a smiling girl peeking out of a purple wallet" width="160" height="160" />
+<img src="app/public/icon-512.png" alt="Patas app icon: a smiling girl peeking out of a wallet, white on violet" width="140" height="140" />
 
 # Patas
 
@@ -30,15 +30,14 @@ Version 1 tracks debts **you owe**. It does not track money other people owe you
 
 ## Features
 
-- **Two kinds of debt.** *One-time*, with an optional pay-by date or "Pay when I can". *Installments*: an amount times a number of months from a start date, and Patas generates the due dates.
-- **Log payments with the real amount.** Paid ₱2,000 of a ₱3,200 installment? It shows *partly paid, ₱1,200 short*. Paid extra? The overpayment rolls to the next installment. Paid late is marked.
-- **Add charges by hand:** late fee, penalty, interest or other. Nothing is added automatically, so there is no surprise interest.
-- **Settle with a write-off,** or reopen a debt later.
-- **Home:** Total I owe, Due this month (and how much of it is paid), Paid this month, and Next payment.
-- **Monthly cash flow card:** you type your income and expenses, and it shows the cash left after your debt payments.
-- **Debts list** with search and filters, **Schedule** of upcoming payments by date, and **Reports** with CSV export and a shareable summary.
-- **Payment QR gallery.** Save the QR codes you pay with (GCash, Maya, GoTyme, bank, other), link one to a debt, and tap **Pay** to show it full screen. It works offline after the first view.
-- **Reminders:** one short phone notification the day before and the day of a due date, at a time you choose. It only says how many payments are due, never names or amounts. A **Send test reminder** button checks it works. You can turn it off per debt.
+- **Three kinds of debt.** *One-time*, with an optional pay-by date or "Pay when I can". *Installments*: an amount per month for a number of months, and Patas makes the due dates. *Recurring*: the same amount every week, two weeks or month, with no end date.
+- **Tick to pay.** On an installment plan, tick the months you're paying and log them as one payment, or type any amount. Paid ₱2,000 of a ₱3,200 month? It shows *₱1,200 left*. Paid late is marked.
+- **Borrowed more, charges, write-offs.** Add to a debt, add a late fee, penalty or interest by hand (nothing is added on its own, so no surprise interest), settle with a write-off, or reopen later.
+- **A page for each person** you owe: everything you borrowed and paid with them, with a running balance and an optional photo. "Borrow again" starts a new debt with them.
+- **Home** fits one screen: Total I owe, Due this month (and how much of it is paid), Paid this month, anything overdue, and a monthly cash flow card that shows what's left after your debt payments.
+- **Debts list** with search and filters, a **Schedule** calendar with every due date, and **Reports** for any period: what's left, debt over time, debt by person, CSV export and a shareable summary.
+- **Payment QR gallery.** Save the QR you pay each person with (GCash, Maya, GoTyme, bank, other) and show it full screen to pay. It works offline after the first view.
+- **Reminders per debt:** pick the day of, 1, 3 or 7 days before, and the time. The notification only says how many payments are due, never names or amounts. A **Send test reminder** button checks it works.
 - **Optional app lock:** a 4-digit MPIN, off by default. Asked when the app opens and after 30 minutes away. Checked on the server; after 5 wrong tries you need an email code.
 - **Sign in with a 6-digit email code.** No password to remember or leak. A bot check protects sign-in.
 - **Works offline.** Saves land on your phone and sync when you're back online.
@@ -50,17 +49,17 @@ Version 1 tracks debts **you owe**. It does not track money other people owe you
 
 ## Screenshots
 
-| Home | Debts | Debt details | Log a payment |
+| Home | Debts | Debt details | Person |
 |---|---|---|---|
-| <img src="docs/screenshots/home.png" alt="Patas home screen showing Total I owe, Due this month, Paid this month, the Monthly cash flow card and Next payment" width="200"/> | <img src="docs/screenshots/debts.png" alt="The Debts list with search, filters, and each debt's remaining amount and status" width="200"/> | <img src="docs/screenshots/debt-details.png" alt="A debt's details: installments with due dates, payments, charges and the amount left" width="200"/> | <img src="docs/screenshots/log-payment.png" alt="The Log payment sheet where you enter the real amount paid" width="200"/> |
+| <img src="docs/screenshots/home.png" alt="Patas home screen: Total I owe, Due this month with how much is left and paid, Paid this month, an overdue strip and the Monthly cash flow card" width="200"/> | <img src="docs/screenshots/debts.png" alt="My debts: a search box, filter chips for one-time, installment, recurring and overdue, and each debt's amount left and next due date" width="200"/> | <img src="docs/screenshots/debt-details.png" alt="A one-time debt's details: amount remaining, progress, reminder, payment QR, history with the person, and payments" width="200"/> | <img src="docs/screenshots/person.png" alt="A person's page: remaining, borrowed and paid with them, Borrow again, their debts and history" width="200"/> |
 
-| Schedule | Reports | Show QR to pay | Reminders (light) |
+| Log a payment | Add a debt | Schedule | Reports |
 |---|---|---|---|
-| <img src="docs/screenshots/schedule.png" alt="Schedule of upcoming payments grouped by due date" width="200"/> | <img src="docs/screenshots/reports.png" alt="Reports screen with CSV export and share a summary" width="200"/> | <img src="docs/screenshots/qr-show.png" alt="A saved payment QR code shown full screen with the payee name read from inside it" width="200"/> | <img src="docs/screenshots/settings-reminders.png" alt="Settings in light mode: the Reminders card with its account switch, reminder time and this phone's status, and the App lock (MPIN) card" width="200"/> |
+| <img src="docs/screenshots/log-payment.png" alt="Log payment on an installment plan: two months ticked, total shown, Pay selected" width="200"/> | <img src="docs/screenshots/add-debt.png" alt="Add debt with three kinds: one-time, installment and recurring" width="200"/> | <img src="docs/screenshots/schedule.png" alt="Schedule calendar for the month with overdue, coming up and paid dates, and the list below" width="200"/> | <img src="docs/screenshots/reports.png" alt="Reports: remaining with percent paid, debt over time chart, and debt by person" width="200"/> |
 
 | Home (dark) | Debts (dark) |
 |---|---|
-| <img src="docs/screenshots/home-dark.png" alt="Patas home screen in dark mode" width="200"/> | <img src="docs/screenshots/debts-dark.png" alt="The Debts list in dark mode" width="200"/> |
+| <img src="docs/screenshots/home-dark.png" alt="Patas home screen in dark mode" width="200"/> | <img src="docs/screenshots/debts-dark.png" alt="My debts in dark mode" width="200"/> |
 
 <sub>Screenshots use invented sample data.</sub>
 

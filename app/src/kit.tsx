@@ -133,6 +133,10 @@ export function IconBtn({ name, label, onPress, filled, soft, color }: { name: I
 export function Header({ title, sub, back, onBack, onSettings, right, greet }: { title?: string; sub?: string; back?: string; onBack?: () => void; onSettings?: () => void; right?: React.ReactNode; greet?: boolean }) {
   const { t } = useSettings();
   const { name } = useStore();
+  // A big title shrinks to its space (down to 18) instead of "My d…" on a 360 px phone with three header buttons.
+  const [room, setRoom] = useState(0);
+  const v: TypeKey = back !== undefined ? 'sec' : greet ? 'greet' : 'title';
+  const fit = v === 'title' && title && room ? Math.max(18, Math.min(28, Math.floor(room / (title.length * 0.6)))) : 0;
   return (
     <View style={k.hdr}>
       {back !== undefined ? (
@@ -143,8 +147,8 @@ export function Header({ title, sub, back, onBack, onSettings, right, greet }: {
       ) : (
         <Logo />
       )}
-      <View style={{ flex: 1, minWidth: 0 }}>
-        {title ? <T v={back !== undefined ? 'sec' : greet ? 'greet' : 'title'} lines={1} role="header">{title}</T> : null}
+      <View style={{ flex: 1, minWidth: 0 }} onLayout={(e) => setRoom(e.nativeEvent.layout.width)}>
+        {title ? <T v={v} lines={1} role="header" style={fit ? { fontSize: fit, lineHeight: Math.round(fit * 1.2) } : undefined}>{title}</T> : null}
         {sub ? <T v="meta" tone="muted" lines={1}>{sub}</T> : null}
       </View>
       {right}

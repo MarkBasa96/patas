@@ -1,150 +1,166 @@
+// My debts (round 4): a search box that is also a dropdown (people and debts), filter chips that wrap, rows that say
+// "₱x left" with the next date and a thin bar, the QR gallery button, Add, and the settled list.
 import React, { useMemo, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 
-import { byDueSoonest, type DebtState, type DebtView } from './derive';
-import { formatPesos } from './money';
-import { formatShort } from './plan';
+import { byDueSoonest } from './derive';
+import { Icon } from './icons';
+import { people } from './insights';
+import { DebtRow, Empty, Header, IconBtn, KIND_LABEL, LinkBtn, ListCard, PersonAvatar, plural, Row, T, type as TY, useMoney } from './kit';
+import { Press, Wash } from './motion';
 import { useSettings } from './settings';
 import { useStore } from './store';
-import { Avatar, Button, Chip, ProgressBar } from './ui';
+import { Chip } from './ui';
 
-type Filter = 'all' | 'one_time' | 'installments' | 'settled';
+export type DebtFilter = 'all' | 'one_time' | 'installments' | 'recurring' | 'overdue';
 
-export function StateTag({ state }: { state: DebtState }) {
+export function DebtsScreen({ filter, onFilter, onAdd, onOpen, onPerson, onQr, onSettings }: { filter: DebtFilter; onFilter: (f: DebtFilter) => void; onAdd: () => void; onOpen: (id: string) => void; onPerson: (key: string) => void; onQr: () => void; onSettings: () => void }) {
   const { t } = useSettings();
-  const map: Record<DebtState, { label: string; bg: string; fg: string }> = {
-    settled: { label: 'Settled', bg: t.mintBg, fg: t.mintInk },
-    overdue: { label: 'Overdue', bg: t.redBg, fg: t.danger },
-    today: { label: 'Due today', bg: t.peachBg, fg: t.peachInk },
-    upcoming: { label: 'Upcoming', bg: t.accentSoft, fg: t.accent },
-    open: { label: 'Pay when I can', bg: t.accentSoft, fg: t.muted },
-  };
-  // Pills only where they carry news: Overdue, Due today, Settled (Erina, 2026-10-21). "Upcoming" sits next
-  // to a date that already says it; "Pay when I can" is plain muted text.
-  if (state === 'upcoming') return null;
-  if (state === 'open') return <Text style={{ fontFamily: 'Inter_500Medium', fontSize: 12, color: t.muted }}>Pay when I can</Text>;
-  const m = map[state];
+  const { views } = useStore();
+  const { conv, display, fmtSum, fmtIn } = useMoney();
+  const [q, setQ] = useState('');
+  const [open, setOpen] = useState(false);
+  const [allPeople, setAllPeople] = useState(false);
+  const [applied, setApplied] = useState('');
+  const [showSettled, setShowSettled] = useState(false);
+  const ppl = useMemo(() => people(views, conv, display), [views, conv, display]);
+  const act = views.filter((v) => v.state !== 'settled').sort(byDueSoonest);
+  const settled = views.filter((v) => v.state === 'settled').sort((a, b) => (b.debt.settled_on ?? '').localeCompare(a.debt.settled_on ?? ''));
+  const needle = applied.trim().toLowerCase();
+  const shown = (showSettled ? settled : act).filter(
+    (v) => (filter === 'all' || filter === 'overdue' || v.debt.kind === filter) && (filter !== 'overdue' || v.state === 'overdue') && (!needle || `${v.debt.person_name} ${v.debt.title}`.toLowerCase().includes(needle)),
+  );
+  const n = q.trim().toLowerCase();
+  const pm = n ? ppl.filter((p) => p.name.toLowerCase().includes(n)).slice(0, 3) : ppl.slice(0, 5);
+  const dm = n ? views.filter((v) => `${v.debt.title} ${v.debt.person_name}`.toLowerCase().includes(n)).slice(0, 6 - pm.length) : [];
+  const chips: [DebtFilter, string][] = [['all', 'All'], ['one_time', 'One-time'], ['installments', 'Installment'], ['recurring', 'Recurring'], ['overdue', 'Overdue']];
+
   return (
-    <View style={{ backgroundColor: m.bg, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 3 }}>
-      <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 12, color: m.fg }}>{m.label}</Text>
+    <View style={{ flex: 1 }}>
+      <Wash height={220} />
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={s.page} keyboardShouldPersistTaps="handled">
+        <Header
+          title={allPeople ? 'People' : showSettled ? 'Settled debts' : 'My debts'}
+          onSettings={onSettings}
+          right={
+            <>
+              <IconBtn name="qr" label="Payment QR codes" onPress={onQr} soft />
+              <IconBtn name="plus" label="Add debt" onPress={onAdd} filled />
+            </>
+          }
+        />
+        <View style={{ zIndex: 5 }}>
+          <View style={[s.inp, { backgroundColor: t.field, borderColor: open ? t.accent : t.border }]}>
+            <Icon name="search" size={20} color={t.muted} />
+            <TextInput
+              value={q}
+              onChangeText={(x) => { setQ(x); setOpen(true); }}
+              onFocus={() => setOpen(true)}
+              onSubmitEditing={() => { setApplied(q); setOpen(false); }}
+              placeholder="Search people or debts"
+              placeholderTextColor={t.muted}
+              accessibilityLabel="Search people or debts"
+              autoCorrect={false}
+              returnKeyType="search"
+              style={[s.input, { color: t.text }]}
+            />
+            <Press accessibilityRole="button" accessibilityLabel={open ? 'Close the list' : 'Show all people and debts'} accessibilityState={{ expanded: open }} onPress={() => setOpen((o) => !o)} style={s.ddBtn}>
+              <Icon name={open ? 'x' : 'down'} size={20} color={t.accent} />
+            </Press>
+          </View>
+          {open ? (
+            <View style={[s.dd, { backgroundColor: t.glassStrong, borderColor: t.panelBorder, shadowColor: t.shadow }]} {...({ dataSet: { glass: 'panel', anim: 'fade' } } as object)}>
+              {pm.length ? <T v="cap" tone="muted" style={s.grp}>PEOPLE</T> : null}
+              {pm.map((p) => (
+                <Press key={p.key} soft accessibilityRole="button" onPress={() => { setOpen(false); onPerson(p.key); }} style={s.opt}>
+                  <PersonAvatar name={p.name} size={36} />
+                  <View style={{ flex: 1, minWidth: 0 }}>
+                    <Hl text={p.name} n={n} />
+                    <T v="meta" tone="muted" lines={1}>{plural(p.views.length, 'debt')} · {fmtSum(p.remaining)}</T>
+                  </View>
+                </Press>
+              ))}
+              {dm.length ? <T v="cap" tone="muted" style={s.grp}>DEBTS</T> : null}
+              {dm.map((v) => (
+                <Press key={v.debt.id} soft accessibilityRole="button" onPress={() => { setOpen(false); onOpen(v.debt.id); }} style={s.opt}>
+                  <View style={{ flex: 1, minWidth: 0 }}>
+                    <Hl text={v.debt.title || KIND_LABEL[v.debt.kind]} n={n} />
+                    <T v="meta" tone="muted" lines={1}>{v.debt.person_name} · {KIND_LABEL[v.debt.kind]}</T>
+                  </View>
+                  <T v="meta">{fmtIn(v.bal.remaining, v.debt.currency)}</T>
+                </Press>
+              ))}
+              {n && !pm.length && !dm.length ? <Empty text={`No person or debt called “${q.trim()}”.`} /> : null}
+              {!n && ppl.length ? (
+                <Press soft accessibilityRole="button" onPress={() => { setOpen(false); setAllPeople(true); }} style={[s.opt, { justifyContent: 'space-between' }]}>
+                  <T v="row" tone="accent">All people ({ppl.length})</T>
+                  <Icon name="right" size={18} color={t.accent} />
+                </Press>
+              ) : null}
+              {!n && !ppl.length ? <Empty text="Nobody yet. Add a debt first." /> : null}
+            </View>
+          ) : null}
+        </View>
+
+        {allPeople ? (
+          <>
+            <View style={s.between}><T v="meta" tone="muted">Everyone you owe</T><LinkBtn label="Back to debts" onPress={() => setAllPeople(false)} /></View>
+            <ListCard style={{ marginTop: 4 }}>
+              {ppl.map((p, i) => (
+                <Row key={p.key} first={i === 0} onPress={() => onPerson(p.key)} label={p.name}>
+                  <PersonAvatar name={p.name} />
+                  <View style={{ flex: 1, minWidth: 0 }}><T v="row" lines={1}>{p.name}</T><T v="meta" tone="muted">{plural(p.views.length, 'debt')} · {p.open} open</T></View>
+                  <T v="row">{fmtSum(p.remaining)}</T>
+                </Row>
+              ))}
+            </ListCard>
+          </>
+        ) : (
+          <>
+            <View style={[s.chips, open && { opacity: 0 }]} pointerEvents={open ? 'none' : 'auto'}>
+              {chips.map(([k, l]) => <Chip key={k} label={l} on={filter === k} onPress={() => onFilter(k)} />)}
+            </View>
+            {applied ? (
+              <View style={s.between}>
+                <T v="meta" tone="muted" lines={1} style={{ flex: 1 }}>Showing “{applied}”</T>
+                <LinkBtn label="Clear" onPress={() => { setApplied(''); setQ(''); }} />
+              </View>
+            ) : null}
+            <ListCard style={{ marginTop: 12 }}>
+              {shown.length ? shown.map((v, i) => <DebtRow key={v.debt.id} v={v} first={i === 0} onPress={() => onOpen(v.debt.id)} />) : <Empty text={showSettled ? 'No settled debts yet.' : views.length ? 'Nothing matches. Try another name or filter.' : 'No debts yet. Tap + to add the first one.'} />}
+            </ListCard>
+            <View style={{ alignItems: 'center', marginTop: 8 }}>
+              {showSettled ? <LinkBtn label="Back to active debts" onPress={() => setShowSettled(false)} /> : settled.length ? <LinkBtn label={`View settled debts (${settled.length})`} onPress={() => setShowSettled(true)} /> : null}
+            </View>
+          </>
+        )}
+      </ScrollView>
     </View>
   );
 }
 
-function DebtCard({ v, onPress }: { v: DebtView; onPress: () => void }) {
+/** The matching part in bold. */
+function Hl({ text, n }: { text: string; n: string }) {
   const { t } = useSettings();
+  const i = n ? text.toLowerCase().indexOf(n) : -1;
+  if (i < 0) return <T v="row" lines={1}>{text}</T>;
   return (
-    <Pressable accessibilityRole="button" accessibilityLabel={`${v.debt.person_name}, ${formatPesos(v.bal.remaining)} remaining`} onPress={onPress} style={[s.card, { backgroundColor: t.surface, borderColor: t.border }]}>
-      <View style={s.row}>
-        <Avatar name={v.debt.person_name} />
-        <View style={{ flex: 1, minWidth: 0 }}>
-          <Text numberOfLines={1} style={[s.person, { color: t.text }]}>{v.debt.person_name}</Text>
-          {v.debt.title ? <Text numberOfLines={1} style={[s.sub, { color: t.muted }]}>{v.debt.title}</Text> : null}
-        </View>
-        <Text style={{ fontFamily: 'Inter_500Medium', fontSize: 12, color: t.muted }}>{v.debt.kind === 'installments' ? 'Installments' : 'One-time'}</Text>
-      </View>
-      <View style={[s.row, { marginTop: 12, alignItems: 'flex-end', flexWrap: 'wrap' }]}>
-        <View style={{ flexGrow: 1, flexBasis: 160, minWidth: 0 }}>
-          <Text style={[s.rem, { color: t.text }]}>
-            {formatPesos(v.bal.remaining)} <Text style={{ fontFamily: 'Inter_500Medium', fontSize: 13, color: t.muted }}>remaining</Text>
-          </Text>
-        </View>
-        <View style={{ alignItems: 'flex-end', gap: 4, marginLeft: 'auto' }}>
-          {v.next ? <Text style={[s.sub, { color: t.text }]}>{formatPesos(v.next.amount)} · {formatShort(v.next.date)}</Text> : null}
-          <StateTag state={v.state} />
-        </View>
-      </View>
-      {/* Its own full-width row, so every card's bar is the same length (Erina, 2026-10-21). */}
-      <View style={{ marginTop: 10 }}><ProgressBar pct={v.bal.pct} /></View>
-    </Pressable>
-  );
-}
-
-export function DebtsScreen({ onAdd, onOpen }: { onAdd: () => void; onOpen: (id: string) => void }) {
-  const { t } = useSettings();
-  const { views } = useStore();
-  const [q, setQ] = useState('');
-  const [filter, setFilter] = useState<Filter>('all');
-
-  const active = useMemo(() => views.filter((v) => v.state !== 'settled'), [views]);
-  const settledViews = useMemo(() => views.filter((v) => v.state === 'settled'), [views]);
-  const shown = useMemo(() => {
-    const needle = q.trim().toLowerCase();
-    return (filter === 'settled' ? settledViews : active)
-      .filter((v) => (filter === 'all' || filter === 'settled' || v.debt.kind === filter) && (!needle || `${v.debt.person_name} ${v.debt.title}`.toLowerCase().includes(needle)))
-      .sort(byDueSoonest);
-  }, [active, settledViews, q, filter]);
-  const total = shown.reduce((n, v) => n + v.bal.remaining, 0);
-
-  return (
-    <ScrollView style={{ flex: 1 }} contentContainerStyle={s.body} keyboardShouldPersistTaps="handled">
-      <View style={s.titleRow}>
-        <Text style={[s.h1, { color: t.text }]}>My debts</Text>
-        <Pressable accessibilityRole="button" accessibilityLabel="Add debt" onPress={onAdd} style={[s.plus, { backgroundColor: t.accentSoft }]}>
-          <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 24, color: t.accent, marginTop: -2 }}>+</Text>
-        </Pressable>
-      </View>
-      <TextInput
-        value={q}
-        onChangeText={setQ}
-        placeholder="Search a person or debt"
-        placeholderTextColor={t.muted}
-        accessibilityLabel="Search a person or debt"
-        autoCorrect={false}
-        style={[s.search, { backgroundColor: t.field, borderColor: t.border, color: t.text }]}
-      />
-      <View style={s.chips}>
-        <Chip label="All" on={filter === 'all'} onPress={() => setFilter('all')} />
-        <Chip label="One-time" on={filter === 'one_time'} onPress={() => setFilter('one_time')} />
-        <Chip label="Installments" on={filter === 'installments'} onPress={() => setFilter('installments')} />
-      </View>
-      <View style={[s.total, { backgroundColor: t.accentSoft }]}>
-        <Text style={{ fontFamily: 'Inter_500Medium', fontSize: 13, color: t.muted }}>Outstanding</Text>
-        <Text style={{ fontFamily: 'Inter_800ExtraBold', fontSize: 26, letterSpacing: -0.5, color: t.text }}>{formatPesos(total)}</Text>
-      </View>
-
-      {shown.map((v) => (
-        <DebtCard key={v.debt.id} v={v} onPress={() => onOpen(v.debt.id)} />
-      ))}
-
-      {!shown.length ? (
-        <View style={s.empty}>
-          <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 18, color: t.text }}>{filter === 'settled' ? 'Nothing settled yet' : active.length ? 'Nothing matches' : 'No debts yet'}</Text>
-          <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 15, color: t.muted, textAlign: 'center', marginTop: 6 }}>
-            {filter === 'settled' ? 'When a debt is settled it moves here.' : active.length ? 'Try another word or filter.' : 'Add the first one to start keeping track.'}
-          </Text>
-          {!active.length && filter !== 'settled' ? <View style={{ marginTop: 16, alignSelf: 'stretch' }}><Button label="Add your first debt" onPress={onAdd} /></View> : null}
-        </View>
-      ) : null}
-
-      {/* Settled debts live behind a link at the foot of the list, as in the approved design. */}
-      {filter === 'settled' ? (
-        <Pressable accessibilityRole="button" onPress={() => setFilter('all')} style={s.foot}>
-          <Text style={[s.footText, { color: t.accent }]}>Back to active debts</Text>
-        </Pressable>
-      ) : settledViews.length ? (
-        <Pressable accessibilityRole="button" onPress={() => setFilter('settled')} style={s.foot}>
-          <Text style={[s.footText, { color: t.accent }]}>View settled debts ({settledViews.length})</Text>
-        </Pressable>
-      ) : null}
-    </ScrollView>
+    <Text numberOfLines={1} style={[TY.row, { color: t.text, fontFamily: 'Manrope_500' }]}>
+      {text.slice(0, i)}
+      <Text style={{ fontFamily: 'Manrope_700' }}>{text.slice(i, i + n.length)}</Text>
+      {text.slice(i + n.length)}
+    </Text>
   );
 }
 
 const s = StyleSheet.create({
-  body: { paddingHorizontal: 16, paddingBottom: 32 },
-  titleRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 6, marginBottom: 10 },
-  h1: { fontFamily: 'Inter_800ExtraBold', fontSize: 26, letterSpacing: -0.3 },
-  plus: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
-  search: { fontFamily: 'Inter_500Medium', fontSize: 15, borderWidth: 1, borderRadius: 14, paddingHorizontal: 14, minHeight: 48 },
-  chips: { flexDirection: 'row', gap: 8, marginVertical: 12, flexWrap: 'wrap' },
-  total: { borderRadius: 16, paddingHorizontal: 16, paddingVertical: 12, marginBottom: 12 },
-  card: { borderRadius: 18, borderWidth: 1, padding: 14, marginBottom: 12 },
-  row: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  person: { fontFamily: 'Inter_700Bold', fontSize: 16 },
-  sub: { fontFamily: 'Inter_500Medium', fontSize: 13 },
-  rem: { fontFamily: 'Inter_700Bold', fontSize: 18 },
-  empty: { alignItems: 'center', paddingVertical: 36, paddingHorizontal: 8 },
-  foot: { minHeight: 44, alignItems: 'center', justifyContent: 'center', marginTop: 4 },
-  footText: { fontFamily: 'Inter_600SemiBold', fontSize: 14 },
+  page: { paddingHorizontal: 16, paddingBottom: 24, width: '100%', maxWidth: 560, alignSelf: 'center' },
+  inp: { flexDirection: 'row', alignItems: 'center', minHeight: 52, borderRadius: 12, borderWidth: 1, paddingLeft: 14, gap: 8 },
+  input: { flex: 1, minWidth: 0, fontFamily: 'Manrope_500', fontSize: 16, minHeight: 50 },
+  ddBtn: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
+  dd: { position: 'absolute', left: 0, right: 0, top: 58, borderRadius: 16, borderWidth: 1, paddingVertical: 6, maxHeight: 380, overflow: 'hidden', shadowOpacity: 1, shadowRadius: 24, shadowOffset: { width: 0, height: 8 } },
+  grp: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 4, letterSpacing: 0.6 },
+  opt: { flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 52, paddingHorizontal: 16, paddingVertical: 6 },
+  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 12 },
+  between: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 8 },
 });

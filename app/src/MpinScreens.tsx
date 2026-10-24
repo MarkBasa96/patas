@@ -7,7 +7,10 @@ import {
 } from './accountPin';
 import { markForgot, takeSignIn } from './freshSignIn';
 import { gate, keepVerifier, relock, weakPin, wrongText, type Gate, type ServerStatus } from './mpinLogic';
+import { Icon } from './icons';
+import { Keypad, Loading, LockBackdrop, Lockup, lockStyles, MpinCard } from './Opening';
 import { signOut } from './session';
+import { supabase } from './supabase';
 import { useSettings } from './settings';
 import { Banner, Button } from './ui';
 
@@ -62,12 +65,14 @@ function NewPin({ title, onPicked, problem, busy }: { title: string; onPicked: (
  * app itself is not on screen at all, so anything open behind it (the QR copy sheet included) closes.
  */
 export function PinGate({ userId, children }: { userId: string; children: React.ReactNode }) {
-  const { t } = useSettings();
   const [g, setG] = useState<Gate | 'checking'>('checking');
   const [problem, setProblem] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const hiddenAt = useRef<number | null>(null);
   const unconfirmed = useRef(false); // opened without hearing from the server (audit L-3)
+  const [pad, setPad] = useState(false);
+  const [email, setEmail] = useState('');
+  useEffect(() => { void supabase?.auth.getUser().then(({ data }) => setEmail(data.user?.email ?? '')); }, []);
 
   // Works out the gate; never sets state itself (the callers do, after it answers).
   const decide = useCallback(async (afterAway: boolean, timeoutMs = 3000): Promise<{ gate: Gate; online: boolean }> => {
@@ -160,31 +165,77 @@ export function PinGate({ userId, children }: { userId: string; children: React.
   }
 
   if (g === 'open') return <>{children}</>;
-  // While checking: the plain background only, no empty card (Erina, 2026-10-21).
-  if (g === 'checking') return <View style={[s.screen, { backgroundColor: t.bg }]} />;
-  return (
-    <View style={[s.screen, { backgroundColor: t.bg }]}>
-      <Text style={[s.brand, { color: t.accent }]}>Patas</Text>
-      <View style={[s.panel, { backgroundColor: t.surface, borderColor: t.border }]}>
-        {g === 'reset' ? (
-          <NewPin title="Set a new MPIN" onPicked={(p) => { void reset(p); }} problem={problem} busy={busy} />
-        ) : g === 'signout' ? (
-          <>
-            <Text style={[s.title, { color: t.text }]}>MPIN locked</Text>
-            <Text style={[s.body, { color: t.muted }]}>Too many wrong tries. Sign in again with a code from your email, then set a new MPIN. Your data stays safe.</Text>
-            <Button label="Sign in with an email code" onPress={() => { void leave(true); }} />
-          </>
-        ) : (
-          <>
-            <PinEntry title="Enter your MPIN" body={g === 'ask-online' ? 'Connect to the internet to unlock this phone.' : undefined} onDone={(p) => { void tryPin(p); }} problem={problem} busy={busy} />
-            <Pressable accessibilityRole="button" onPress={() => { void leave(true); }} style={s.link}>
-              <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 14, color: t.accent }}>Forgot MPIN? Sign in with an email code</Text>
-            </Pressable>
-          </>
-        )}
+  // While checking: the white opening screen with the mascot on its ring (round 4).
+  if (g === 'checking') return <Loading />;
+  const mask = email.replace(/^(.)[^@]*/, (_m, a: string) => a + '•••');
+  const links = (
+    <View style={{ marginTop: 'auto' }}>
+      <View style={lockStyles.links}>
+        <Pressable accessibilityRole="button" onPress={() => { void leave(false); }} style={lockStyles.link}><Text style={lockStyles.linkText}>Not you? Switch</Text></Pressable>
+        <Pressable accessibilityRole="button" onPress={() => { void leave(true); }} style={lockStyles.link}><Text style={lockStyles.linkText}>Forgot MPIN?</Text></Pressable>
       </View>
+      <Text style={lockStyles.ver}>Patas 1.1</Text>
     </View>
   );
+  if (g === 'reset') {
+    return (
+      <LockBackdrop>
+        <Lockup white width={160} />
+        <NewPinPad onPicked={(p) => { void reset(p); }} problem={problem} busy={busy} />
+        {links}
+      </LockBackdrop>
+    );
+  }
+  if (g === 'signout') {
+    return (
+      <LockBackdrop>
+        <Lockup white width={200} />
+        <View style={{ flex: 1, justifyContent: 'center', width: '100%', alignItems: 'center' }}>
+          <View style={lockStyles.panel} {...({ dataSet: { glass: 'lock' } } as object)}>
+            <Text style={lockStyles.panelTitle}>MPIN locked</Text>
+            <Text style={lockStyles.panelBody}>Too many wrong tries. Sign in again with a code from your email, then set a new MPIN. Your data stays safe.</Text>
+            <Button label="Sign in with an email code" onPress={() => { void leave(true); }} />
+          </View>
+        </View>
+      </LockBackdrop>
+    );
+  }
+  if (!pad) {
+    return (
+      <LockBackdrop>
+        <Lockup white width={236} />
+        {mask ? (
+          <Pressable accessibilityRole="button" accessibilityLabel={`Signed in as ${mask}. Switch account`} onPress={() => { void leave(false); }} style={lockStyles.pill}>
+            <Text style={lockStyles.pillText}>{mask}</Text>
+            <Icon name="swap" size={18} color="#FFFFFF" />
+          </Pressable>
+        ) : null}
+        <View style={{ flex: 1, justifyContent: 'center' }}><MpinCard onPress={() => setPad(true)} /></View>
+        {g === 'ask-online' ? <Text style={[lockStyles.ver, { marginBottom: 12 }]}>Connect to the internet to unlock this phone.</Text> : null}
+        {links}
+      </LockBackdrop>
+    );
+  }
+  return (
+    <LockBackdrop>
+      <Lockup white width={160} />
+      <Keypad title="Enter your MPIN" body={g === 'ask-online' ? 'Connect to the internet to unlock this phone.' : undefined} problem={problem} busy={busy} onDone={(p) => { void tryPin(p); }} />
+      {links}
+    </LockBackdrop>
+  );
+}
+
+/** New MPIN on the keypad, typed twice; weak picks are refused here too (the server checks again). */
+function NewPinPad({ onPicked, problem, busy }: { onPicked: (pin: string) => void; problem?: string | null; busy?: boolean }) {
+  const [first, setFirst] = useState<string | null>(null);
+  const [msg, setMsg] = useState<string | null>(null);
+  const [seen, setSeen] = useState(problem);
+  if (problem !== seen) { setSeen(problem); if (problem) { setFirst(null); setMsg(problem); } }
+  if (first === null)
+    return <Keypad key="a" title="Set a new MPIN" body="4 digits. Not a run like 1234 or the same digit four times." problem={msg} busy={busy}
+      onDone={(p) => { if (weakPin(p)) setMsg('That MPIN is too easy to guess. Pick another.'); else { setMsg(null); setFirst(p); } }} />;
+  return <Keypad key="b" title="Type it again" busy={busy} problem={msg}
+    onDone={(p) => { if (p !== first) { setFirst(null); setMsg('Those did not match. Start again.'); } else onPicked(p); }} />;
 }
 
 type Step = null | 'on' | 'change-old' | 'change-new' | 'off';
@@ -274,14 +325,14 @@ export function MpinSection({ userId }: { userId: string }) {
 const s = StyleSheet.create({
   screen: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 16 },
   panel: { width: '100%', maxWidth: 420, borderRadius: 20, borderWidth: 1, padding: 20 },
-  brand: { fontFamily: 'Inter_800ExtraBold', fontSize: 22, letterSpacing: -0.3, marginBottom: 16 },
+  brand: { fontFamily: 'Manrope_700', fontSize: 22, letterSpacing: -0.3, marginBottom: 16 },
   link: { minHeight: 44, alignItems: 'center', justifyContent: 'center', marginTop: 12 },
-  title: { fontFamily: 'Inter_700Bold', fontSize: 20, marginBottom: 6 },
-  body: { fontFamily: 'Inter_400Regular', fontSize: 15, lineHeight: 21, marginBottom: 12 },
-  pin: { fontFamily: 'Inter_700Bold', fontSize: 28, letterSpacing: 12, textAlign: 'center', borderWidth: 1, borderRadius: 14, minHeight: 60, marginTop: 8 },
+  title: { fontFamily: 'Manrope_700', fontSize: 20, marginBottom: 6 },
+  body: { fontFamily: 'Manrope_400', fontSize: 15, lineHeight: 21, marginBottom: 12 },
+  pin: { fontFamily: 'Manrope_700', fontSize: 28, letterSpacing: 12, textAlign: 'center', borderWidth: 1, borderRadius: 14, minHeight: 60, marginTop: 8 },
   card: { borderRadius: 18, borderWidth: 1, padding: 14, marginBottom: 12 },
-  h2: { fontFamily: 'Inter_700Bold', fontSize: 17, marginBottom: 10 },
-  note: { fontFamily: 'Inter_400Regular', fontSize: 14, lineHeight: 20, marginBottom: 10 },
+  h2: { fontFamily: 'Manrope_700', fontSize: 17, marginBottom: 10 },
+  note: { fontFamily: 'Manrope_400', fontSize: 14, lineHeight: 20, marginBottom: 10 },
   scrim: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', alignItems: 'center', justifyContent: 'center', padding: 24 },
   dialog: { width: '100%', maxWidth: 420, borderRadius: 20, borderWidth: 1, padding: 20 },
 });

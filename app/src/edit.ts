@@ -1,8 +1,9 @@
 // Turning an edited form into row changes. Only the changed rows come back, so only they get sent.
 import { hasCredits, type DebtView } from './derive';
 import type { DebtForm, DebtRow, InstallmentRow, LineRow } from './ledger';
+import { formPlan } from './ledger';
 import { parsePesos } from './money';
-import { buildPlan } from './plan';
+import { isIsoDate } from './plan';
 
 export type EditResult = { debt: DebtRow; installments: InstallmentRow[]; lines: LineRow[] } | { error: string };
 
@@ -16,7 +17,13 @@ export function editDebt(v: DebtView, f: DebtForm, newId: () => string, nowMs: n
     note: f.note,
     remind: f.remind,
     due_on: v.debt.kind === 'one_time' && f.due ? f.due : null,
+    currency: /^[A-Z]{3}$/.test(f.currency) ? f.currency : v.debt.currency,
   };
+  if (v.debt.kind === 'recurring') {
+    // The rule can change (a new amount from now on is a new debt in real life, but a typo must be fixable).
+    if (!isIsoDate(f.first)) return { error: 'invalid first date' };
+    return { debt: { ...debt, recurring_amount_centavos: amount, recurring_every: f.repeat, recurring_first: f.first, recurring_until: f.until && isIsoDate(f.until) ? f.until : null }, installments: [], lines: [] };
+  }
   const installments: InstallmentRow[] = [];
   const lines: LineRow[] = [];
 
@@ -27,8 +34,7 @@ export function editDebt(v: DebtView, f: DebtForm, newId: () => string, nowMs: n
     return { debt, installments, lines };
   }
 
-  const pay = parsePesos(f.payment);
-  const plan = pay === null ? null : buildPlan(amount, pay, f.repeat, f.first);
+  const plan = formPlan(f);
   if (!plan) return { error: 'invalid plan' };
   const same =
     plan.length === v.installments.length &&

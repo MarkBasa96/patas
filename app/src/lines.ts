@@ -20,7 +20,10 @@ export type LineForm = { amount: string; date: string; method: string; note: str
 export const emptyLineForm = (today: string): LineForm => ({ amount: '', date: today, method: 'Cash', note: '', chargeKind: 'late_fee' });
 export type LineErrors = Partial<Record<keyof LineForm, string>>;
 
-export function validateLine(f: LineForm, kind: 'payment' | 'charge', today: string): LineErrors {
+/** What a line form can add: a payment, a charge, or (round 4) money borrowed again on a one-time debt. */
+export type LineFormKind = 'payment' | 'charge' | 'addition';
+
+export function validateLine(f: LineForm, kind: LineFormKind, today: string): LineErrors {
   const e: LineErrors = {};
   if (parsePesos(f.amount) === null) e.amount = 'Enter the amount, for example 500 or 1,200.50.';
   if (!isIsoDate(f.date)) e.date = 'Pick a real date.';
@@ -31,7 +34,7 @@ export function validateLine(f: LineForm, kind: 'payment' | 'charge', today: str
 }
 
 /** A new line, or (with `existing`) the same line with new values: same id, so it replaces the old one. */
-export function buildLine(kind: 'payment' | 'charge', f: LineForm, debtId: string, id: string, nowMs: number, existing?: LineRow): LineRow {
+export function buildLine(kind: LineFormKind, f: LineForm, debtId: string, id: string, nowMs: number, existing?: LineRow): LineRow {
   const amount = parsePesos(f.amount);
   if (amount === null) throw new Error('invalid amount');
   return {
@@ -70,7 +73,11 @@ export function settle(v: DebtView, today: string, writeOff: boolean, newId: () 
 
 /** A debt whose balance reached zero by payments settles by itself (SPEC 14 step 5). Null if nothing changes. */
 export function autoSettled(v: DebtView, today: string): DebtRow | null {
-  return v.debt.settled_on === null && v.bal.owed > 0 && v.bal.remaining === 0 ? { ...v.debt, settled_on: today } : null;
+  if (v.debt.settled_on !== null || v.bal.owed <= 0 || v.bal.remaining !== 0) return null;
+  // A recurring debt goes on after this month is paid: it settles by itself only once its end date has passed and
+  // every date up to it is paid.
+  if (v.debt.kind === 'recurring') return v.debt.recurring_until && v.debt.recurring_until <= today && v.schedule.every((s) => s.short === 0) ? { ...v.debt, settled_on: today } : null;
+  return { ...v.debt, settled_on: today };
 }
 
 /** Reopen: clear the settled date and take back the write-off that settling made (and only that one). */

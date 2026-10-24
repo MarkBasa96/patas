@@ -97,7 +97,7 @@ test('share summary: amounts and dates only, never a QR or account name', () => 
   assert.match(s, /Total: ₱2,400/);
   assert.match(s, /Paid: ₱500/);
   assert.match(s, /Left: ₱1,900/);
-  assert.match(s, /Next due: ₱700 on Oct 20, 2026/);
+  assert.match(s, /Next due: ₱700.00 on Oct 20, 2026/);
   assert.equal(/qr|png|account/i.test(s), false);
   assert.match(overallSummary(views, '2026-10-20'), /Active debts: 2/);
 });

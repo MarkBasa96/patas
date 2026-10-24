@@ -232,11 +232,13 @@ check('...and the upsert could not back-date it', 'true',
   (await su(`select added_at > now() - interval '1 minute' as fresh from public.qr_items where user_id = $1 and id = 'c5'`, [B]))[0]?.fresh);
 
 // ---------- Exactly the intended rules exist (catches a rule added by hand in the dashboard) ----------
-const qrPolicies = (await su(`select cmd from pg_policies where schemaname = 'storage' and tablename = 'objects' order by cmd`)).map((r) => r.cmd).join(',');
-check('Storage rules are exactly read, add, remove (no update)', 'DELETE,INSERT,SELECT', qrPolicies);
+const pol = async (b) => (await su(`select cmd from pg_policies where schemaname = 'storage' and tablename = 'objects' and policyname like $1 order by cmd`, [b + ':%'])).map((r) => r.cmd).join(',');
+check('QR storage rules are exactly read, add, remove (no update: a QR is never overwritten)', 'DELETE,INSERT,SELECT', await pol('qr'));
+check('Photo storage rules are read, add, change, remove (a new photo may replace the old)', 'DELETE,INSERT,SELECT,UPDATE', await pol('photos'));
+check('No storage rule other than those two buckets', '7', (await su(`select count(*)::int n from pg_policies where schemaname = 'storage' and tablename = 'objects'`))[0].n);
 const pub = (await su(`select count(*)::int as n, (count(*) filter (where cmd in ('DELETE', 'ALL')))::int as bad,
   (count(*) filter (where 'anon' = any(roles) or 'public' = any(roles)))::int as open from pg_policies where schemaname = 'public'`))[0];
-check('Table rules: 3 per table, no delete, none for anon', '18 0 0', `${pub.n} ${pub.bad} ${pub.open}`);
+check('Table rules: 3 per table (8 tables), no delete, none for anon', '24 0 0', `${pub.n} ${pub.bad} ${pub.open}`);
 const noRls = (await su(`select string_agg(relname, ',') as t from pg_class c join pg_namespace n on n.oid = c.relnamespace
   where n.nspname = 'public' and c.relkind = 'r' and not (c.relrowsecurity and c.relforcerowsecurity)`))[0].t;
 check('Every public table has RLS on and forced', 'null', String(noRls));

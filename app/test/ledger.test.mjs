@@ -24,10 +24,10 @@ test('parsePesos: plain amounts to exact centavos, junk refused', () => {
 });
 
 test('formatPesos and pesosToInput round-trip', () => {
-  assert.equal(formatPesos(120000), '₱1,200');
+  assert.equal(formatPesos(120000), '₱1,200.00');
   assert.equal(formatPesos(120050), '₱1,200.50');
   assert.equal(formatPesos(5), '₱0.05');
-  assert.equal(formatPesos(-310000), '−₱3,100');
+  assert.equal(formatPesos(-310000), '−₱3,100.00');
   for (const c of [1, 99, 100, 120050, 99999999999]) assert.equal(parsePesos(pesosToInput(c)), c);
 });
 
@@ -111,7 +111,7 @@ test('form: valid forms pass, every bad input is caught with a message', () => {
   bad({ due: '2026-02-30' }, 'due');
   assert.deepEqual(validateForm({ ...goodOne(), note: 'line1\nline2' }), {}); // newlines are fine in notes
   const badI = (patch, key) => assert.ok(validateForm({ ...goodInst(), ...patch })[key], `${key} for ${JSON.stringify(patch)}`);
-  badI({ payment: '' }, 'payment');
+  badI({ payment: '' }, 'count'); // round 4: with no count and no payment amount, the count is what is missing
   badI({ payment: '3601' }, 'payment');
   badI({ payment: '1' }, 'payment'); // 3,600 payments
   badI({ first: '' }, 'first');
@@ -192,7 +192,7 @@ test('currency is display only: the symbol changes, the centavos never do', asyn
   assert.equal(currencySymbol(), '$'); // unknown codes are ignored
   assert.equal(isCurrency('toString'), false); // not tricked by object prototype names
   assert.equal(isCurrency('EUR'), true);
-  assert.equal(Object.keys(CURRENCIES).length, 7);
+  assert.equal(Object.keys(CURRENCIES).length, 21);
   setCurrency('PHP');
   assert.equal(f(5), '₱0.05');
 });

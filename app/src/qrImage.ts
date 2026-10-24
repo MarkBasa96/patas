@@ -74,7 +74,7 @@ export async function buildCopy(stored: Blob, today: string): Promise<Copy | nul
   g.drawImage(bmp, L.margin, L.margin, bmp.width * L.scale, bmp.height * L.scale);
   bmp.close();
   g.fillStyle = '#5B6270';
-  g.font = `500 ${Math.max(14, Math.round(L.caption * 0.42))}px Inter_500Medium, Inter, sans-serif`;
+  g.font = `500 ${Math.max(14, Math.round(L.caption * 0.42))}px Manrope_500, Inter, sans-serif`;
   g.textAlign = 'center';
   g.textBaseline = 'middle';
   g.fillText(copyCaption(today), c.width / 2, L.height - L.caption / 2 - Math.round(L.margin / 4));

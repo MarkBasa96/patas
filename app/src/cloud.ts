@@ -1,15 +1,13 @@
 // Storage on the phone and the trip to Supabase. Everything that touches the network is here.
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-import { afterCursorFilter, int, str, type Cursor } from './merge';
+import { afterCursorFilter, str, type Cursor } from './merge';
 import { emptyLocal, reviveLocal, type Data, type Local, type TableKey } from './local';
 import { cacheClearAll } from './qrCache';
-import { qrRowsKey } from './qrs';
+import { localKey as key, userKeys } from './keys';
 import { rowFrom } from './rows';
 import { supabase } from './supabase';
 import { OfflineError, pushWithFallback, type DbError } from './syncCore';
-
-const key = (uid: string) => `patas.v1.${uid}`;
 
 export async function loadLocal(uid: string): Promise<Local> {
   try {
@@ -28,14 +26,14 @@ export async function saveLocal(uid: string, l: Local): Promise<void> {
 }
 export async function clearLocal(uid: string): Promise<void> {
   try {
-    await AsyncStorage.multiRemove([key(uid), qrRowsKey(uid)]);
+    await AsyncStorage.multiRemove(userKeys(uid));
   } catch {
     /* nothing to do */
   }
   await cacheClearAll(); // QR pictures: SPEC 7, cleared on sign-out and account deletion
 }
 
-const TABLE_NAME: Record<TableKey, string> = { debts: 'debts', installments: 'installments', lines: 'debt_lines' };
+const TABLE_NAME: Record<TableKey, string> = { debts: 'debts', installments: 'installments', lines: 'debt_lines', cash: 'cashflow_months' };
 
 
 /** Send one table's waiting rows. `done` = taken by the server or refused for good (bad data). */
@@ -81,17 +79,17 @@ export async function pullTable<K extends TableKey>(k: K, from: Cursor): Promise
   return { rows: out as Data[K], cursor };
 }
 
-// ---- Home's two typed cash-flow numbers live in the account's settings row ----
-export async function pushCash(uid: string, cash: { income: number; expenses: number; currency: string }): Promise<void> {
+// ---- The account's settings row: the display currency and the greeting name (round 4). Cash flow is its own table. ----
+export async function pushSettings(uid: string, s: { currency: string; name: string }): Promise<void> {
   if (!supabase) throw new OfflineError('no server settings');
-  const { error } = await supabase.from('user_settings').upsert({ user_id: uid, cashflow_income_centavos: cash.income, cashflow_expenses_centavos: cash.expenses, currency: cash.currency }, { onConflict: 'user_id' });
+  const { error } = await supabase.from('user_settings').upsert({ user_id: uid, currency: s.currency, display_name: s.name }, { onConflict: 'user_id' });
   if (error) throw new OfflineError(error.message);
 }
 
-export async function pullCash(): Promise<{ income: number; expenses: number; currency: string } | null> {
+export async function pullSettings(): Promise<{ currency: string; name: string } | null> {
   if (!supabase) throw new OfflineError('no server settings');
-  const { data, error } = await supabase.from('user_settings').select('cashflow_income_centavos,cashflow_expenses_centavos,currency').limit(1);
+  const { data, error } = await supabase.from('user_settings').select('currency,display_name').limit(1);
   if (error) throw new OfflineError(error.message);
   const r = data[0] as Record<string, unknown> | undefined;
-  return r ? { income: int(r.cashflow_income_centavos), expenses: int(r.cashflow_expenses_centavos), currency: str(r.currency, 'PHP') } : null;
+  return r ? { currency: str(r.currency, 'PHP'), name: str(r.display_name) } : null;
 }

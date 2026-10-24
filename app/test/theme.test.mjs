@@ -41,15 +41,17 @@ for (const key of THEME_ORDER) {
   }
 }
 
-test('every bundled Inter weight draws the peso sign (U+20B1)', async () => {
+test('the bundled Manrope draws the peso sign (U+20B1) and has equal-width digits (tnum)', async () => {
   const opentype = require('opentype.js');
-  const dir = fileURLToPath(new URL('../assets/fonts/', import.meta.url));
+  const dir = fileURLToPath(new URL('../public/fonts/', import.meta.url));
   const files = readdirSync(dir).filter((f) => f.endsWith('.ttf'));
-  assert.equal(files.length, 5);
-  for (const f of files) {
-    const buf = readFileSync(dir + f);
-    const font = opentype.parse(buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength));
-    const g = font.charToGlyph('₱');
-    assert.ok(g && g.index !== 0 && g.unicode === 0x20b1, `${f} has no peso glyph`);
-  }
+  assert.deepEqual(files, ['Manrope-Variable.ttf']);
+  const buf = readFileSync(dir + files[0]);
+  const font = opentype.parse(buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength));
+  const g = font.charToGlyph('₱');
+  assert.ok(g && g.index !== 0 && g.unicode === 0x20b1, 'no peso glyph');
+  const tags = (font.tables.gsub?.features ?? []).map((f) => f.tag);
+  assert.ok(tags.includes('tnum'), 'no tnum feature');
+  const sym = ['$', '€', '£', '¥']; // every currency symbol the app shows must be drawn (others use letters)
+  for (const c of sym) assert.notEqual(font.charToGlyph(c).index, 0, c);
 });

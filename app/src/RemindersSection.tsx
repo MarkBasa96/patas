@@ -93,9 +93,9 @@ export function RemindersSection({ userId }: { userId: string }) {
 const s = StyleSheet.create({
   card: { borderRadius: 18, borderWidth: 1, padding: 14, marginBottom: 12 },
   between: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
-  h2: { fontFamily: 'Inter_700Bold', fontSize: 17, marginBottom: 10 },
-  label: { fontFamily: 'Inter_600SemiBold', fontSize: 14, marginTop: 6, marginBottom: 8 },
+  h2: { fontFamily: 'Manrope_700', fontSize: 17, marginBottom: 10 },
+  label: { fontFamily: 'Manrope_600', fontSize: 14, marginTop: 6, marginBottom: 8 },
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 8 },
   cell: { flexBasis: '30%', flexGrow: 1 }, // three equal columns, so six times never leave one chip alone
-  note: { fontFamily: 'Inter_400Regular', fontSize: 14, lineHeight: 20, marginBottom: 10 },
+  note: { fontFamily: 'Manrope_400', fontSize: 14, lineHeight: 20, marginBottom: 10 },
 });

@@ -50,14 +50,13 @@ const mutants = [
   // Once a day has two guards: the "not exists" filter (sequential runs) and the claim's "if not found"
   // (two runs racing). Each covers the other for sequential runs, so this mutant removes both. The race
   // alone can't be staged in PGlite (one connection); it is checked on the real project (two parallel calls).
-  ['digest twice a day', [["private.reminder_sent x\n                        where x.user_id", "private.reminder_sent x\n                        where false and x.user_id"],
-    ["on conflict do nothing;\n      if not found then continue; end if;", "on conflict do nothing;"]], null, '6f'],
-  ['payments ignored for installments', "where p.due_on = p_day and coalesce(c.c, 0) < p.upto", "where p.due_on = p_day", '6f'],
+  ['digest twice a day (both once-a-day guards)', [["and not exists (select 1 from private.reminder_sent_debt x\n                            where x.user_id = r.user_id and x.debt_id = e.debt_id and x.local_date = r.today)", "and true"], ["on conflict do nothing\n        returning debt_id", "on conflict (user_id, debt_id, local_date) do update set sent_at = now()\n        returning debt_id"]], null, '6f'],
+  ['payments ignored for installments', "select p.debt_id, p.due_on from plan p left join credits c on c.debt_id = p.debt_id\n     where coalesce(c.c, 0) < p.upto", "select p.debt_id, p.due_on from plan p left join credits c on c.debt_id = p.debt_id\n     where true", '6f'],
   ['payments ignored for one-time debts', "and coalesce(b.d, 0) > coalesce(c.c, 0)", "", '6f'],
   ['debts with reminders off included', "and d.settled_on is null and d.remind", "and d.settled_on is null", '6f'],
   ['settled debts included', "and d.settled_on is null and d.remind", "and d.remind", '6f'],
   ['deleted payments still pay', "where l.user_id = p_uid and not l.deleted\n       and (l.kind in", "where l.user_id = p_uid\n       and (l.kind in", '6f'],
-  ["server clock instead of the person's time zone", "(p_now at time zone s.time_zone)::time >= s.reminder_at", "(p_now at time zone 'UTC')::time >= s.reminder_at", '6f'],
+  ["server clock instead of the person's time zone", "(p_now at time zone s.time_zone)::time as now_t", "(p_now at time zone 'UTC')::time as now_t", '6f'],
   ['push keys replaceable', "if exists (select 1 from vault.secrets where name = 'patas_vapid_public') then return '{\"result\":\"exists\"}'; end if;", "", '6f'],
   ['test reminder unlimited', "\n   where private.reminder_test.asked_at < now() - interval '2 minutes';", ";", '6f'],
   ["test reminder returns other people's phones", "from public.push_subscriptions p where p.user_id = uid and not p.deleted));", "from public.push_subscriptions p where not p.deleted));", '6f'],
@@ -74,23 +73,53 @@ const mutants = [
   ['offline wrong tries ignored', "if p_n is null or p_n < 1 then return", "if true then return", '6f'],
   ["one person's broken data stops everyone (audit L-4)", "exception when others then\n      null; -- skipped", "exception when division_by_zero then\n      null; -- skipped", '6f'],
   ['a shared phone gets both accounts (audit L-7)', "and not o.deleted and o.updated_at > p.updated_at)", "and false)", '6f'],
+  ['digests for people with no phone', "     where s.reminders_on\n       and exists (select 1 from private.live_subs(s.user_id))", "     where s.reminders_on", '6f'],
+  // round 4 (suite r4: run-r4.mjs; each pair is applied to schema.sql and to migrations/0007 wherever it is found)
+  ['reminder days ignored', "where (u.due_on - p_day) = any (lv.remind_days)", "where (u.due_on - p_day) in (0, 1)", 'r4'],
+  ["a debt's own time ignored", "where coalesce(d.remind_at, r.reminder_at) <= r.now_t", "where r.reminder_at <= r.now_t", 'r4'],
+  ['extra date reminds even when paid', "where lv.remind_on = p_day and exists (select 1 from unpaid u where u.debt_id = lv.id)", "where lv.remind_on = p_day", 'r4'],
+  ['recurring prepayments ignored', "select r.debt_id, r.due_on from rec r left join credits c on c.debt_id = r.debt_id\n     where coalesce(c.c, 0) < r.upto", "select r.debt_id, r.due_on from rec r left join credits c on c.debt_id = r.debt_id\n     where true", 'r4'],
+  ['recurring end date ignored', "\n       and (lv.recurring_until is null or g.due_on <= lv.recurring_until)", "", 'r4'],
+  ['recurring dates stepped wrong (months as 30 days)', "else (lv.recurring_first + make_interval(months => s.n))::date end as due_on", "else lv.recurring_first + 30 * s.n end as due_on", 'r4'],
+  ['recurring debt without its fields', "(kind = 'recurring') = (recurring_amount_centavos is not null and recurring_every is not null and recurring_first is not null)", "true", 'r4'],
+  ['other kinds may carry recurring fields', "and (kind = 'recurring' or (recurring_amount_centavos is null and recurring_every is null and recurring_first is null and recurring_until is null))", "", 'r4'],
+  ['reminder days any number', "remind_days <@ array[0, 1, 3, 7]::smallint[] and ", "", 'r4'],
+  ['currency any text', [["  currency     text not null default 'PHP' check (currency ~ '^[A-Z]{3}$'),\n  -- Recurring", "  currency     text not null default 'PHP',\n  -- Recurring"], ["add column if not exists currency text not null default 'PHP' check (currency ~ '^[A-Z]{3}$');", "add column if not exists currency text not null default 'PHP';"]], null, 'r4'],
+  ['month id any text', "check (id ~ '^[0-9]{4}-(0[1-9]|1[0-2])$')", "check (true)", 'r4'],
+  ['negative income allowed', "income_centavos   bigint not null default 0 check (income_centavos between 0 and 99999999999)", "income_centavos   bigint not null default 0", 'r4'],
+  ['photo id not tied to the name', "or (id = 'p-' || left(encode(extensions.digest(person_key, 'sha256'), 'hex'), 16) and person_key <> ''))", "or (person_key <> ''))", 'r4'],
+  ['photo row may point anywhere', "constraint photos_path check (storage_path = user_id::text || '/' || id || '.jpg'),", "", 'r4'],
+  ['photo upload without a photos row', "and exists (select 1 from public.photos p where p.user_id = (select auth.uid()) and p.storage_path = objects.name and not p.deleted)\n  );\ncreate policy \"photos: change own\"", ");\ncreate policy \"photos: change own\"", 'r4'],
+  ['photo files readable by anyone signed in', "bucket_id = 'photos'\n    and (storage.foldername(name))[1] = (select auth.uid())::text\n    and not storage.allow_any_operation", "bucket_id = 'photos'\n    and not storage.allow_any_operation", 'r4'],
+  ['photo links may be minted', "    bucket_id = 'photos'\n    and (storage.foldername(name))[1] = (select auth.uid())::text\n    and not storage.allow_any_operation(array['object.sign', 'object.sign_many', 'render.image_sign'])", "    bucket_id = 'photos'\n    and (storage.foldername(name))[1] = (select auth.uid())::text", 'r4'],
+  ['photos bucket public', [["values ('photos', 'photos', false, 65536", "values ('photos', 'photos', true, 65536"], ["set public = false, file_size_limit = 65536", "set public = true, file_size_limit = 65536"]], null, 'r4'],
+  ["photo files changeable in others' folders", "for update to authenticated\n  using (bucket_id = 'photos' and (storage.foldername(name))[1] = (select auth.uid())::text)", "for update to authenticated\n  using (bucket_id = 'photos')", 'r4'],
+  ["photo files removable in others' folders", "for delete to authenticated\n  using (bucket_id = 'photos' and (storage.foldername(name))[1] = (select auth.uid())::text);", "for delete to authenticated\n  using (bucket_id = 'photos');", 'r4'],
+  ['greeting name any text', "display_name text not null default '' check (public.patas_clean_line(display_name, 40))", "display_name text not null default ''", 'r4'],
+  ["this month's cash flow not carried over", "where s.cashflow_income_centavos > 0 or s.cashflow_expenses_centavos > 0", "where false", 'r4'],
+  ['old debts lose the old reminder days', [["remind_days  smallint[] not null default '{0,1}'", "remind_days  smallint[] not null default '{}'"], ["add column if not exists remind_days smallint[] not null default '{0,1}'", "add column if not exists remind_days smallint[] not null default '{}'"]], null, 'r4'],
   ['PIN table readable', "revoke all on private.account_pin from public, anon, authenticated;", "grant usage on schema private to authenticated; grant select on private.account_pin to authenticated;", '6f'],
 ];
 
 
 const dir = mkdtempSync(join(tmpdir(), 'patas-mutants-'));
+const migration = readFileSync(join(here, '..', 'migrations', '0007_round4.sql'), 'utf8');
 let survived = 0;
-for (const [name, from, to, suite] of mutants) {
+// MUTANT_ONLY="name one|name two" runs just those (to re-check a fix quickly); a full run is the real proof.
+const only = process.env.MUTANT_ONLY ? process.env.MUTANT_ONLY.split('|') : null;
+for (const [name, from, to, suite] of only ? mutants.filter((m) => only.some((o) => m[0].includes(o))) : mutants) {
   const pairs = Array.isArray(from) ? from : [[from, to]];
-  if (pairs.some(([f]) => !original.includes(f))) { console.log(`SKIP  ${name} (pattern not found: fix mutants.mjs)`); survived++; continue; }
-  let s = original;
-  for (const [f, t] of pairs) s = s.replace(f, () => t);
-  const file = join(dir, 'schema.sql');
-  writeFileSync(file, s);
-  const r = spawnSync(process.execPath, [join(here, suite === '6f' ? 'run-6f.mjs' : 'run-local.mjs')], { env: { ...process.env, PATAS_SCHEMA: file }, encoding: 'utf8' });
-  const fails = (r.stdout.match(/^FAIL .*$/gm) || []);
-  const crashed = r.status !== 0 && fails.length === 0;
-  if (r.status === 0) { survived++; console.log(`SURVIVED  ${name}`); }
+  const inMig = suite === 'r4';
+  if (pairs.some(([f]) => !original.includes(f) && !(inMig && migration.includes(f)))) { console.log(`SKIP  ${name} (pattern not found: fix mutants.mjs)`); survived++; continue; }
+  let s = original, m = migration;
+  for (const [f, t] of pairs) { s = s.replace(f, () => t); if (inMig) m = m.replace(f, () => t); }
+  const file = join(dir, 'schema.sql'), mfile = join(dir, '0007.sql');
+  writeFileSync(file, s); writeFileSync(mfile, m);
+  const script = suite === '6f' ? 'run-6f.mjs' : suite === 'r4' ? 'run-r4.mjs' : 'run-local.mjs';
+  const r = spawnSync(process.execPath, [join(here, script)], { env: { ...process.env, PATAS_SCHEMA: file, PATAS_0007: mfile }, encoding: 'utf8' });
+  const fails = (r.stdout.match(/^FAIL .*$/gm) || []).filter((l) => !(inMig && /Upgraded == fresh/.test(l)));
+  const crashed = r.status !== 0 && fails.length === 0 && !(r.stdout.match(/^FAIL .*$/gm) || []).length;
+  if (r.status === 0 || (inMig && !fails.length && !crashed)) { survived++; console.log(`SURVIVED  ${name}`); }
   else console.log(`caught    ${name}: ${crashed ? 'schema/test crashed: ' + (r.stderr.split('\n').find((l) => /error/i.test(l)) || '').slice(0, 90) : fails.length + ' check(s) failed, e.g. ' + fails[0].slice(6, 90)}`);
 }
 rmSync(dir, { recursive: true, force: true });

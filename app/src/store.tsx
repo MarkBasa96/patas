@@ -1,13 +1,14 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 
-import { clearLocal, loadLocal, pullCash, pullTable, pushCash, pushTable, saveLocal } from './cloud';
+import { clearLocal, loadLocal, pullSettings, pullTable, pushSettings, pushTable, saveLocal } from './cloud';
 import { liveViews, type DebtView } from './derive';
 import { editDebt } from './edit';
 import { newId } from './ids';
 import { buildDebt, type DebtForm, type DebtRow, type LineRow } from './ledger';
-import { autoSettled, buildLine, reopen, settle, type LineForm } from './lines';
+import { personKey } from './insights';
+import { autoSettled, buildLine, reopen, settle, type LineForm, type LineFormKind } from './lines';
 import type { RestorePlan } from './exportData';
-import { applyCashPulled, applyCashPushed, applyPulled, applyPushed, emptyLocal, pendingCount, pendingRows, putRows, setCash, setCurrencyLocal, TABLE_ORDER, type Data, type Local } from './local';
+import { applyPulled, applyPushed, applySettingsPulled, applySettingsPushed, cashByMonth, emptyLocal, pendingCount, pendingRows, putRows, setCashMonth, setCurrencyLocal, setNameLocal, TABLE_ORDER, type Data, type Local } from './local';
 import { setCurrency } from './money';
 import { todayIso } from './plan';
 import { OfflineError } from './syncCore';
@@ -22,16 +23,23 @@ type Store = {
   saveNew: (f: DebtForm) => string;
   saveEdit: (id: string, f: DebtForm) => string | null; // null = saved, otherwise a message to show
   remove: (id: string) => void;
-  /** Add (or, with `existing`, replace) a payment or charge. */
-  saveLine: (kind: 'payment' | 'charge', debtId: string, f: LineForm, existing?: LineRow) => void;
+  /** Add (or, with `existing`, replace) a payment, a charge or a "borrowed more" line. */
+  saveLine: (kind: LineFormKind, debtId: string, f: LineForm, existing?: LineRow) => void;
+  /** A debt's own reminders (round 4): on/off, days before, an extra date, a time (null = the account's time). */
+  saveReminder: (debtId: string, r: { remind: boolean; days: number[]; on: string | null; at: string | null }) => void;
   deleteLine: (lineId: string) => void;
   settleDebt: (debtId: string, writeOff: boolean) => void;
   reopenDebt: (debtId: string) => void;
+  /** This month's income and expenses (round 4: kept per month; `months` has them all). */
   cash: { income: number; expenses: number };
+  months: Record<string, { income: number; expenses: number }>;
   currency: string;
-  saveCash: (income: number, expenses: number) => void;
+  /** The name Home greets with. */
+  name: string;
+  saveCash: (income: number, expenses: number, month?: string) => void;
+  saveName: (name: string) => void;
   saveCurrency: (code: string) => void;
-  /** Point this person's active debts at a QR (and unpoint any other debt using it). person null = link to nobody. */
+  /** Point every debt of this person (same name, any case) at a QR (and unpoint any other debt using it). person null = link to nobody. */
   linkQr: (qrId: string, person: string | null) => void;
   /** After a QR is replaced: every debt that used the old one uses the new one. */
   moveQrLinks: (fromId: string, toId: string) => void;
@@ -40,6 +48,8 @@ type Store = {
   snapshot: () => Data;
   /** Write a restore plan (rows marked waiting to sync) and, optionally, the backup's cash-flow numbers. */
   restore: (plan: RestorePlan, cash?: { income: number; expenses: number }) => void;
+  /** All of this phone's rows, for screens that need more than the views (the person ledger, reports). */
+  data: Data;
   syncNow: () => Promise<void>;
   /** Sign out step 1: one last upload attempt. Returns how many changes still have not reached the cloud. */
   prepareLeave: () => Promise<number>;
@@ -79,15 +89,15 @@ export function StoreProvider({ userId, children }: { userId: string; children: 
         commit(applyPushed(ref.current, k, revs, done));
       }
       if (ref.current.settingsDirty) {
-        const sent = { ...ref.current.cash, currency: ref.current.currency };
-        await pushCash(userId, sent);
-        commit(applyCashPushed(ref.current, sent));
+        const sent = { currency: ref.current.currency, name: ref.current.name };
+        await pushSettings(userId, sent);
+        commit(applySettingsPushed(ref.current, sent));
       }
       for (const k of TABLE_ORDER) {
         const { rows, cursor } = await pullTable(k, ref.current.cursors[k]);
         commit(applyPulled(ref.current, k, rows, cursor));
       }
-      commit(applyCashPulled(ref.current, await pullCash()));
+      commit(applySettingsPulled(ref.current, await pullSettings()));
       if (alive.current) setStatus('synced');
     } catch (e) {
       if (alive.current) setStatus(e instanceof OfflineError ? 'offline' : 'offline');
@@ -120,7 +130,10 @@ export function StoreProvider({ userId, children }: { userId: string; children: 
   const saveNew = useCallback(
     (f: DebtForm): string => {
       const made = buildDebt(f, { debt: newId(), child: newId }, Date.now(), todayIso());
-      let l = putRows(ref.current, 'debts', [made.debt]);
+      // One QR per person (round 4): a new debt for someone who already has one uses it at once.
+      const k = personKey(made.debt.person_name);
+      const qr = ref.current.data.debts.find((d) => !d.deleted && d.qr_id && personKey(d.person_name) === k)?.qr_id ?? null;
+      let l = putRows(ref.current, 'debts', [{ ...made.debt, qr_id: qr }]);
       l = putRows(l, 'installments', made.installments);
       l = putRows(l, 'lines', made.lines);
       commit(l);
@@ -159,7 +172,7 @@ export function StoreProvider({ userId, children }: { userId: string; children: 
   const viewOf = useCallback((id: string) => liveViews(ref.current.data.debts, ref.current.data.installments, ref.current.data.lines, todayIso()).find((x) => x.debt.id === id), []);
 
   const saveLine = useCallback(
-    (kind: 'payment' | 'charge', debtId: string, f: LineForm, existing?: LineRow) => {
+    (kind: LineFormKind, debtId: string, f: LineForm, existing?: LineRow) => {
       let l = putRows(ref.current, 'lines', [buildLine(kind, f, debtId, newId(), Date.now(), existing)]);
       const v = liveViews(l.data.debts, l.data.installments, l.data.lines, todayIso()).find((x) => x.debt.id === debtId);
       const done = v ? autoSettled(v, todayIso()) : null;
@@ -206,6 +219,17 @@ export function StoreProvider({ userId, children }: { userId: string; children: 
     [commit, syncNow, viewOf],
   );
 
+  const saveReminder = useCallback<Store['saveReminder']>(
+    (debtId, r) => {
+      const d = ref.current.data.debts.find((x) => x.id === debtId);
+      if (!d) return;
+      const days = [...new Set(r.days.filter((x) => x === 0 || x === 1 || x === 3 || x === 7))].sort((a, b) => a - b);
+      commit(putRows(ref.current, 'debts', [{ ...d, remind: r.remind, remind_days: days, remind_on: r.on, remind_at: r.at }]));
+      void syncNow();
+    },
+    [commit, syncNow],
+  );
+
   const saveCurrency = useCallback(
     (code: string) => {
       commit(setCurrencyLocal(ref.current, code));
@@ -215,8 +239,16 @@ export function StoreProvider({ userId, children }: { userId: string; children: 
   );
 
   const saveCash = useCallback(
-    (income: number, expenses: number) => {
-      commit(setCash(ref.current, income, expenses));
+    (income: number, expenses: number, month = todayIso().slice(0, 7)) => {
+      commit(setCashMonth(ref.current, month, income, expenses, Date.now()));
+      void syncNow();
+    },
+    [commit, syncNow],
+  );
+
+  const saveName = useCallback(
+    (name: string) => {
+      commit(setNameLocal(ref.current, name));
       void syncNow();
     },
     [commit, syncNow],
@@ -227,7 +259,7 @@ export function StoreProvider({ userId, children }: { userId: string; children: 
       const changed = ref.current.data.debts
         .filter((d) => !d.deleted)
         .flatMap((d): DebtRow[] => {
-          const want = person !== null && d.person_name === person && d.settled_on === null;
+          const want = person !== null && personKey(d.person_name) === personKey(person);
           if (want && d.qr_id !== qrId) return [{ ...d, qr_id: qrId }];
           if (!want && d.qr_id === qrId) return [{ ...d, qr_id: null }];
           return [];
@@ -259,7 +291,7 @@ export function StoreProvider({ userId, children }: { userId: string; children: 
       if (plan.debts.length) l = putRows(l, 'debts', plan.debts); // parents first
       if (plan.installments.length) l = putRows(l, 'installments', plan.installments);
       if (plan.lines.length) l = putRows(l, 'lines', plan.lines);
-      if (cash) l = setCash(l, cash.income, cash.expenses);
+      if (cash) l = setCashMonth(l, todayIso().slice(0, 7), cash.income, cash.expenses, Date.now()); // an older backup: this month
       commit(l);
       void syncNow();
     },
@@ -276,8 +308,8 @@ export function StoreProvider({ userId, children }: { userId: string; children: 
   }, [userId]);
 
   const value = useMemo<Store>(
-    () => ({ views, status, pending: pendingCount(local), refused, cash: local.cash, currency: local.currency, saveCash, saveCurrency, linkQr, moveQrLinks, debtsUsingQr, snapshot, restore, saveNew, saveEdit, remove, saveLine, deleteLine, settleDebt, reopenDebt, syncNow, prepareLeave, finishLeave }),
-    [views, status, local, refused, saveCash, saveCurrency, linkQr, moveQrLinks, debtsUsingQr, snapshot, restore, saveNew, saveEdit, remove, saveLine, deleteLine, settleDebt, reopenDebt, syncNow, prepareLeave, finishLeave],
+    () => { const months = cashByMonth(local); return { views, status, pending: pendingCount(local), refused, cash: months[todayIso().slice(0, 7)] ?? { income: 0, expenses: 0 }, months, currency: local.currency, name: local.name, data: local.data, saveCash, saveName, saveCurrency, linkQr, moveQrLinks, debtsUsingQr, snapshot, restore, saveNew, saveEdit, remove, saveLine, saveReminder, deleteLine, settleDebt, reopenDebt, syncNow, prepareLeave, finishLeave }; },
+    [views, status, local, refused, saveCash, saveName, saveCurrency, linkQr, moveQrLinks, debtsUsingQr, snapshot, restore, saveNew, saveEdit, remove, saveLine, saveReminder, deleteLine, settleDebt, reopenDebt, syncNow, prepareLeave, finishLeave],
   );
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

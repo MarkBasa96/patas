@@ -8,7 +8,7 @@
     <meta name="author" content="Joemark Basa" />
     <!-- Only Patas itself, its database (Supabase) and the bot check (Cloudflare Turnstile). QR pictures are
          shown from blob: URLs; the QR decoder needs WebAssembly. No eval, no plugins, no outside images. -->
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval' https://challenges.cloudflare.com; style-src 'self' 'unsafe-inline'; img-src 'self' blob: data:; font-src 'self' data:; connect-src 'self' https://*.supabase.co wss://*.supabase.co https://challenges.cloudflare.com; frame-src https://challenges.cloudflare.com; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval' https://challenges.cloudflare.com; style-src 'self' 'unsafe-inline'; img-src 'self' blob: data:; font-src 'self' data:; connect-src 'self' https://*.supabase.co wss://*.supabase.co https://challenges.cloudflare.com https://open.er-api.com https://api.frankfurter.dev; frame-src https://challenges.cloudflare.com; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'" />
     <link rel="manifest" href="/manifest.json" />
     <link rel="icon" type="image/png" href="/icon-192.png" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
@@ -16,14 +16,59 @@
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-title" content="Patas" />
     <meta name="color-scheme" content="light dark" />
-    <meta name="theme-color" content="#F6F6F3" media="(prefers-color-scheme: light)" />
-    <meta name="theme-color" content="#111318" media="(prefers-color-scheme: dark)" />
+    <meta name="theme-color" content="#F6F5F9" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#12111A" media="(prefers-color-scheme: dark)" />
+    <link rel="preload" href="/fonts/Manrope-Variable.ttf" as="font" type="font/ttf" crossorigin />
     <style id="expo-reset">
       :root { color-scheme: light dark; }
-      html, body { height: 100%; background-color: #F6F6F3; }
-      @media (prefers-color-scheme: dark) { html, body { background-color: #111318; } }
+      html, body { height: 100%; background-color: #F6F5F9; }
+      @media (prefers-color-scheme: dark) { html, body { background-color: #12111A; } }
       body { overflow: hidden; }
       #root { display: flex; height: 100%; flex: 1; }
+    </style>
+    <style id="patas-r4">
+      /* Round 4: Manrope (SIL OFL, fonts/OFL-Manrope.txt), one variable file. Each name is pinned to one weight, so the
+         app picks a weight by name (Manrope_400 ... Manrope_700) whatever font-weight the element asks for. */
+      @font-face { font-family: "Manrope_400"; src: url("/fonts/Manrope-Variable.ttf") format("truetype"); font-weight: 400; font-display: block; }
+      @font-face { font-family: "Manrope_500"; src: url("/fonts/Manrope-Variable.ttf") format("truetype"); font-weight: 500; font-display: block; }
+      @font-face { font-family: "Manrope_600"; src: url("/fonts/Manrope-Variable.ttf") format("truetype"); font-weight: 600; font-display: block; }
+      @font-face { font-family: "Manrope_700"; src: url("/fonts/Manrope-Variable.ttf") format("truetype"); font-weight: 700; font-display: block; }
+      /* Money lines up: equal-width digits everywhere (Manrope tnum, checked in the font file). */
+      #root { font-variant-numeric: tabular-nums; -webkit-font-smoothing: antialiased; }
+      /* Glass (Erina): blur only on bars, popups, sheets, toasts and dropdowns; cards over the soft wash need none. */
+      [data-glass="bar"] { -webkit-backdrop-filter: blur(16px) saturate(160%); backdrop-filter: blur(16px) saturate(160%); }
+      [data-glass="panel"] { -webkit-backdrop-filter: blur(20px) saturate(180%); backdrop-filter: blur(20px) saturate(180%); }
+      [data-glass="scrim"] { -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); }
+      [data-glass="lock"] { -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px); }
+      @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) { [data-glass="bar"], [data-glass="panel"] { background-color: var(--solid, #fff) !important; } }
+      @media (prefers-reduced-transparency: reduce) { [data-glass] { -webkit-backdrop-filter: none !important; backdrop-filter: none !important; } }
+      /* Text fields sit in bordered boxes: the box shows focus with a soft accent ring instead of the browser box. */
+      #root input:focus, #root textarea:focus { outline: none; }
+      #root div:has(> input:focus):not([data-glass]), #root div:has(> textarea:focus) { box-shadow: 0 0 0 3px rgba(89, 70, 231, 0.28); }
+      /* Press: a quick scale-down on anything tappable that asks for it. */
+      [data-press] { transition: transform 120ms ease-out, opacity 120ms; }
+      [data-press]:active { transform: scale(0.97); }
+      [data-press="soft"]:active { transform: scale(0.985); }
+      /* Entrances: popups scale and fade, sheets slide up, toasts slide down, screens fade in. */
+      @keyframes p-pop { from { opacity: 0; transform: scale(0.94); } to { opacity: 1; transform: none; } }
+      @keyframes p-fade { from { opacity: 0; } to { opacity: 1; } }
+      @keyframes p-sheet { from { transform: translateY(100%); } to { transform: none; } }
+      @keyframes p-toast { from { opacity: 0; transform: translateY(-24px); } to { opacity: 1; transform: none; } }
+      @keyframes p-screen { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+      @keyframes p-check { from { stroke-dashoffset: 18; } to { stroke-dashoffset: 0; } }
+      @keyframes p-spin { to { transform: rotate(360deg); } }
+      @keyframes p-shake { 20%, 60% { transform: translateX(-8px); } 40%, 80% { transform: translateX(8px); } }
+      [data-anim="pop"] { animation: p-pop 200ms cubic-bezier(.2,.8,.2,1) both; }
+      [data-anim="fade"] { animation: p-fade 180ms ease-out both; }
+      [data-anim="sheet"] { animation: p-sheet 280ms cubic-bezier(.2,.8,.2,1) both; }
+      [data-anim="toast"] { animation: p-toast 260ms cubic-bezier(.2,.8,.2,1) both; }
+      [data-anim="screen"] { animation: p-screen 220ms ease-out both; }
+      [data-anim="spin"] { animation: p-spin 1.1s linear infinite; }
+      [data-anim="shake"] { animation: p-shake 360ms ease-in-out; }
+      [data-anim="check"] path { stroke-dasharray: 18; animation: p-check 360ms 120ms ease-out both; }
+      @media (prefers-reduced-motion: reduce) { [data-anim] { animation: none !important; } [data-press]:active { transform: none; } }
+      html[data-reduce="1"] [data-anim] { animation: none !important; }
+      ::view-transition-old(root), ::view-transition-new(root) { animation: none; mix-blend-mode: normal; }
     </style>
   </head>
   <body>

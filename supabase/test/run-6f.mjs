@@ -96,7 +96,7 @@ check('Late run the same day still sends nothing twice', 'none', who(await batch
 const ny = await batch('2026-10-21T01:00:00Z');
 check('New York 21:00 (01:00Z): D, with "due tomorrow" in its own calendar', 'D|Due tomorrow: 1 payment.', `${who(ny)}|${digests(ny)[0]?.body}`);
 check('Next day in Manila: A again (its i2 is now due today)', 'A', who(await batch('2026-10-22T00:05:00Z')));
-check("A can't read the sent log", 'error 42501', val(await as(A, `select count(*) from private.reminder_sent`)));
+check("A can't read the sent log", 'error 42501', val(await as(A, `select count(*) from private.reminder_sent_debt`)));
 check('Nothing due: no digest at all (no empty nudge)', 'none', who(await batch('2026-10-25T00:05:00Z')));
 
 // ---------------- test reminder, push keys, gone subscriptions ----------------
@@ -135,15 +135,15 @@ await su(`insert into public.push_subscriptions (user_id, id, endpoint, p256dh, 
           values ($1, 'p2', 'https://web.push.apple.com/fake-a-two', repeat('B', 60), repeat('c', 16), ${T})`, [A]);
 await debt(A, 'dA9', 'one_time', '2026-10-30'); await line(A, 'dA9', 'l91', 'principal', 1000);
 await debt(B, 'dB9', 'one_time', '2026-10-30'); await line(B, 'dB9', 'l92', 'principal', 1000);
-await db.exec(`alter function private.reminder_counts(uuid, date) rename to reminder_counts_real;
-  create function private.reminder_counts(p_uid uuid, p_day date) returns table (i_owe int, owed_to_me int)
+await db.exec(`alter function private.reminder_events(uuid, date) rename to reminder_events_real;
+  create function private.reminder_events(p_uid uuid, p_day date) returns table (debt_id text, days int)
   language plpgsql stable set search_path = '' as $f$ begin
     if p_uid = '${A}' then raise exception 'planted breakage'; end if;
-    return query select * from private.reminder_counts_real(p_uid, p_day); end $f$;`);
+    return query select * from private.reminder_events_real(p_uid, p_day); end $f$;`);
 const broken = await batch('2026-10-29T00:05:00Z');
-check("A's broken data: B still gets its digest, A's day is not claimed", 'B 0',
-  `${who(broken)} ${(await su(`select count(*)::int n from private.reminder_sent where user_id = $1 and local_date = '2026-10-29'`, [A]))[0].n}`);
-await db.exec(`drop function private.reminder_counts(uuid, date); alter function private.reminder_counts_real(uuid, date) rename to reminder_counts;`);
+check("A's broken data: B still gets its digest, none of A's debts is claimed", 'B 0',
+  `${who(broken)} ${(await su(`select count(*)::int n from private.reminder_sent_debt where user_id = $1 and local_date = '2026-10-29'`, [A]))[0].n}`);
+await db.exec(`drop function private.reminder_events(uuid, date); alter function private.reminder_events_real(uuid, date) rename to reminder_events;`);
 check('Once fixed, the next run sends A the digest it missed', 'A', who(await batch('2026-10-29T00:20:00Z')));
 
 // ---------------- MPIN ----------------

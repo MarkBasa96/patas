@@ -1,20 +1,22 @@
 import React from 'react';
-import { ActivityIndicator, Modal, Platform, Pressable, StyleSheet, Switch, Text, TextInput, View, type KeyboardTypeOptions } from 'react-native';
+import { ActivityIndicator, Image, Modal, Platform, Pressable, StyleSheet, Switch, Text, TextInput, View, type KeyboardTypeOptions } from 'react-native';
 
 import { useSettings } from './settings';
 
 export function Button({ label, onPress, disabled, busy, kind = 'primary' }: { label: string; onPress: () => void; disabled?: boolean; busy?: boolean; kind?: 'primary' | 'outline' | 'danger' }) {
   const { t } = useSettings();
   // Solid red with white text in both modes: the pale dark-mode danger colour reads as disabled (seen in Gastos).
-  const bg = kind === 'primary' ? t.accentFill : kind === 'danger' ? '#C9372F' : 'transparent';
-  const fg = kind === 'outline' ? t.accent : '#FFFFFF';
+  // Disabled is solid (Erina round 4 build review): a dimmed button over a glass bar let the page show through.
+  const bg = disabled && kind !== 'outline' ? t.track : kind === 'primary' ? t.accentFill : kind === 'danger' ? '#C9372F' : 'transparent';
+  const fg = disabled ? t.muted : kind === 'outline' ? t.accent : '#FFFFFF';
   return (
     <Pressable
       accessibilityRole="button"
       accessibilityState={{ disabled: !!disabled }}
       disabled={disabled || busy}
       onPress={onPress}
-      style={[s.button, { backgroundColor: bg, borderColor: kind === 'outline' ? t.accent : 'transparent', borderWidth: kind === 'outline' ? 1.5 : 0, opacity: disabled ? 0.45 : 1 }]}
+      {...({ dataSet: { press: '1' } } as object)}
+      style={[s.button, { backgroundColor: bg, borderColor: kind === 'outline' ? (disabled ? t.border : t.accent) : 'transparent', borderWidth: kind === 'outline' ? 1.5 : 0 }]}
     >
       {busy ? <ActivityIndicator color={fg} /> : <Text style={[s.buttonText, { color: fg }]}>{label}</Text>}
     </Pressable>
@@ -27,7 +29,7 @@ export function Field({ label, error, children, optional }: { label: string; err
     <View style={s.field}>
       <Text style={[s.label, { color: t.text }]}>
         {label}
-        {optional ? <Text style={{ color: t.muted, fontFamily: 'Inter_400Regular' }}> (optional)</Text> : null}
+        {optional ? <Text style={{ color: t.muted, fontFamily: 'Manrope_400' }}> (optional)</Text> : null}
       </Text>
       {children}
       {error ? <Text accessibilityRole="alert" style={[s.err, { color: t.danger }]}>{error}</Text> : null}
@@ -56,18 +58,29 @@ export function Input({ value, onChangeText, placeholder, keyboardType, maxLengt
   );
 }
 
-/** A real date picker on the web; typed YYYY-MM-DD elsewhere (the phone app comes later). */
-export function DateField({ value, onChange, label }: { value: string; onChange: (v: string) => void; label: string }) {
+const WD = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+const MO = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const dayText = (v: string) => /^\d{4}-\d{2}-\d{2}$/.test(v) ? `${WD[new Date(v + 'T00:00:00Z').getUTCDay()]}, ${MO[Number(v.slice(5, 7)) - 1]} ${Number(v.slice(8, 10))}, ${v.slice(0, 4)}` : '';
+
+/**
+ * Round 4 (Erina fix 12): a field-styled date in the app's own words ("Fri, Oct 23, 2026"). The phone's own picker lies
+ * invisibly on top, so a tap opens it on iPhone and Android. Typed YYYY-MM-DD off the web.
+ */
+export function DateField({ value, onChange, label, empty = 'Pick a date', min, max }: { value: string; onChange: (v: string) => void; label: string; empty?: string; min?: string; max?: string }) {
   const { t } = useSettings();
   if (Platform.OS === 'web') {
     return (
-      <View style={[s.inputWrap, { backgroundColor: t.field, borderColor: t.border }]}>
+      <View style={[s.inputWrap, { backgroundColor: t.field, borderColor: t.border, paddingHorizontal: 14 }]}>
+        <Text numberOfLines={1} style={{ flex: 1, fontFamily: 'Manrope_500', fontSize: 16, color: value ? t.text : t.muted }}>{value ? dayText(value) : empty}</Text>
         {React.createElement('input', {
           type: 'date',
           value,
+          min,
+          max,
           'aria-label': label,
           onChange: (e: { target: { value: string } }) => onChange(e.target.value),
-          style: { flex: 1, minHeight: 50, border: 0, background: 'transparent', color: t.text, fontFamily: 'Inter_500Medium', fontSize: 16, padding: '0 12px', colorScheme: 'inherit' },
+          onClick: (e: { currentTarget: { showPicker?: () => void } }) => { try { e.currentTarget.showPicker?.(); } catch { /* not allowed here */ } },
+          style: { position: 'absolute', inset: 0, width: '100%', height: '100%', opacity: 0, cursor: 'pointer', border: 0 },
         })}
       </View>
     );
@@ -82,8 +95,8 @@ export function Segmented<T extends string>({ value, options, onChange, label }:
       {options.map((o) => {
         const on = o.key === value;
         return (
-          <Pressable key={o.key} accessibilityRole="radio" accessibilityState={{ selected: on }} onPress={() => onChange(o.key)} style={[s.segItem, on && { backgroundColor: t.accentFill }]}>
-            <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 14, color: on ? '#FFFFFF' : t.text }}>{o.label}</Text>
+          <Pressable key={o.key} accessibilityRole="radio" accessibilityLabel={o.label} accessibilityState={{ checked: on }} onPress={() => onChange(o.key)} style={[s.segItem, on && { backgroundColor: t.accentFill }]}>
+            <Text style={{ fontFamily: 'Manrope_600', fontSize: 14, color: on ? '#FFFFFF' : t.text }}>{o.label}</Text>
           </Pressable>
         );
       })}
@@ -107,8 +120,8 @@ export function Toggle({ value, onValueChange, label }: { value: boolean; onValu
 export function Chip({ label, on, onPress }: { label: string; on: boolean; onPress: () => void }) {
   const { t } = useSettings();
   return (
-    <Pressable accessibilityRole="button" accessibilityState={{ selected: on }} onPress={onPress} style={[s.chip, { borderColor: on ? t.accentFill : t.border, backgroundColor: on ? t.accentFill : t.surface }]}>
-      <Text numberOfLines={1} style={{ fontFamily: 'Inter_600SemiBold', fontSize: 13, color: on ? '#FFFFFF' : t.text }}>{label}</Text>
+    <Pressable accessibilityRole="button" accessibilityState={{ selected: on }} onPress={onPress} {...({ dataSet: { press: '1' } } as object)} style={[s.chip, { borderColor: on ? t.accentFill : t.border, backgroundColor: on ? t.accentFill : t.surface }]}>
+      <Text numberOfLines={1} style={{ fontFamily: 'Manrope_600', fontSize: 13, color: on ? '#FFFFFF' : t.text }}>{label}</Text>
     </Pressable>
   );
 }
@@ -117,7 +130,7 @@ export function Banner({ text, tone = 'info' }: { text: string; tone?: 'info' | 
   const { t } = useSettings();
   return (
     <View accessibilityRole="alert" style={[s.banner, { backgroundColor: tone === 'warn' ? t.peachBg : t.accentSoft }]}>
-      <Text style={{ fontFamily: 'Inter_500Medium', fontSize: 13, lineHeight: 18, color: tone === 'warn' ? t.peachInk : t.accent }}>{text}</Text>
+      <Text style={{ fontFamily: 'Manrope_500', fontSize: 13, lineHeight: 18, color: tone === 'warn' ? t.peachInk : t.accent }}>{text}</Text>
     </View>
   );
 }
@@ -129,8 +142,8 @@ export function Confirm({ visible, title, body, confirmLabel, onConfirm, onCance
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onCancel}>
       <View style={s.scrim}>
         <View accessibilityRole="alert" style={[s.dialog, { backgroundColor: t.surface, borderColor: t.border }]}>
-          <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 18, color: t.text }}>{title}</Text>
-          <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 15, lineHeight: 21, color: t.muted, marginTop: 8 }}>{body}</Text>
+          <Text style={{ fontFamily: 'Manrope_700', fontSize: 18, color: t.text }}>{title}</Text>
+          <Text style={{ fontFamily: 'Manrope_400', fontSize: 15, lineHeight: 21, color: t.muted, marginTop: 8 }}>{body}</Text>
           <View style={{ gap: 10, marginTop: 18 }}>
             <Button label={confirmLabel} kind={tone === 'danger' ? 'danger' : 'primary'} onPress={onConfirm} />
             {extraLabel && onExtra ? <Button label={extraLabel} kind="outline" onPress={onExtra} /> : null}
@@ -144,13 +157,13 @@ export function Confirm({ visible, title, body, confirmLabel, onConfirm, onCance
 
 const s = StyleSheet.create({
   button: { minHeight: 52, borderRadius: 14, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 16 },
-  buttonText: { fontFamily: 'Inter_700Bold', fontSize: 16 },
+  buttonText: { fontFamily: 'Manrope_700', fontSize: 16 },
   field: { marginBottom: 14 },
-  label: { fontFamily: 'Inter_600SemiBold', fontSize: 14, marginBottom: 6 },
-  err: { fontFamily: 'Inter_500Medium', fontSize: 13, marginTop: 6 },
+  label: { fontFamily: 'Manrope_600', fontSize: 14, marginBottom: 6 },
+  err: { fontFamily: 'Manrope_500', fontSize: 13, marginTop: 6 },
   inputWrap: { flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderRadius: 14, minHeight: 52 },
-  prefix: { fontFamily: 'Inter_700Bold', fontSize: 16, paddingLeft: 14 },
-  input: { flex: 1, fontFamily: 'Inter_500Medium', fontSize: 16, paddingHorizontal: 14, minHeight: 50 },
+  prefix: { fontFamily: 'Manrope_700', fontSize: 16, paddingLeft: 14 },
+  input: { flex: 1, fontFamily: 'Manrope_500', fontSize: 16, paddingHorizontal: 14, minHeight: 50 },
   seg: { flexDirection: 'row', borderWidth: 1, borderRadius: 14, padding: 4, gap: 4, marginBottom: 14 },
   segItem: { flex: 1, minHeight: 44, borderRadius: 11, alignItems: 'center', justifyContent: 'center' },
   toggle: { minWidth: 52, minHeight: 44, alignItems: 'center', justifyContent: 'center' },
@@ -173,11 +186,12 @@ export const initials = (name: string): string => {
   return (((w[0] ?? '?')[0] ?? '?') + (w.length > 1 ? (w[w.length - 1] ?? '')[0] ?? '' : '')).toUpperCase();
 };
 
-export function Avatar({ name, size = 44 }: { name: string; size?: number }) {
+export function Avatar({ name, size = 44, uri }: { name: string; size?: number; uri?: string }) {
   const { t } = useSettings();
+  if (uri) return <Image source={{ uri }} accessibilityIgnoresInvertColors style={{ width: size, height: size, borderRadius: size / 2 }} />;
   return (
     <View style={{ width: size, height: size, borderRadius: size / 2, backgroundColor: t.accentSoft, alignItems: 'center', justifyContent: 'center' }}>
-      <Text style={{ fontFamily: 'Inter_700Bold', fontSize: size * 0.32, color: t.accent }}>{initials(name)}</Text>
+      <Text style={{ fontFamily: 'Manrope_700', fontSize: size * 0.32, color: t.accent }}>{initials(name)}</Text>
     </View>
   );
 }

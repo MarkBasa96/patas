@@ -54,6 +54,21 @@ export function buildPlan(total: number, payment: number, repeat: Repeat, first:
   }));
 }
 
+/**
+ * Round 4: "6 payments" instead of "pay 2,000 each". Every payment is the same (the total divided by the count,
+ * rounded down to the centavo) and the rounding goes into the last one, so ₱5,000 in 6 is 5 × ₱833.33 + ₱833.35.
+ * `each` (when the person typed the payment amount themself) replaces the division; the last one still makes the
+ * total exact, and must stay at least ₱0.01. Null if the numbers do not make a plan.
+ */
+export function planByCount(total: number, count: number, repeat: Repeat, first: string, each?: number | null): PlanRow[] | null {
+  if (!Number.isSafeInteger(total) || total < 1 || !Number.isSafeInteger(count) || count < 1 || count > MAX_INSTALLMENTS || !isIsoDate(first)) return null;
+  const e = each ?? Math.floor(total / count);
+  if (!Number.isSafeInteger(e) || e < 1) return null;
+  const last = total - e * (count - 1);
+  if (last < 1) return null;
+  return Array.from({ length: count }, (_, i) => ({ seq: i + 1, due_on: stepDate(first, repeat, i), amount_centavos: i < count - 1 ? e : last }));
+}
+
 /** Today's date on the phone, as the person sees it (local calendar, not UTC). */
 export function todayIso(now: Date = new Date()): string {
   const p = (n: number) => String(n).padStart(2, '0');

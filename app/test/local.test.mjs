@@ -112,7 +112,7 @@ test('edit: a changed plan is rebuilt (old rows soft-deleted); unchanged plan se
   const nothing = editDebt(v, formFromDebt(v), () => 'x', 5, TODAY);
   assert.equal(nothing.installments.length, 0);
   let k = 0;
-  const changed = editDebt(v, { ...formFromDebt(v), payment: '1800' }, () => `n${++k}`, 5, TODAY);
+  const changed = editDebt(v, { ...formFromDebt(v), count: '2', payment: '' }, () => `n${++k}`, 5, TODAY); // round 4: you pick the number of payments
   assert.equal(changed.installments.filter((i) => i.deleted).length, 3);
   const fresh = changed.installments.filter((i) => !i.deleted);
   assert.deepEqual(fresh.map((i) => i.amount_centavos), [180000, 180000]);
@@ -121,7 +121,7 @@ test('edit: a changed plan is rebuilt (old rows soft-deleted); unchanged plan se
   const payment = { id: 'p1', debt_id: inst.debt.id, kind: 'payment', charge_kind: null, adjust_sign: null, amount_centavos: 50000, on_date: TODAY, note: '', created_at: 9, deleted: false };
   const vp = debtView(inst.debt, inst.installments, [payment], TODAY);
   assert.equal(hasCredits(vp.lines), true);
-  const blocked = editDebt(vp, { ...formFromDebt(vp), payment: '1800' }, () => 'z', 5, TODAY);
+  const blocked = editDebt(vp, { ...formFromDebt(vp), count: '2', payment: '' }, () => 'z', 5, TODAY);
   assert.ok(blocked.error);
   const okName = editDebt(vp, { ...formFromDebt(vp), person: 'Renamed' }, () => 'z', 5, TODAY);
   assert.equal(okName.debt.person_name, 'Renamed');

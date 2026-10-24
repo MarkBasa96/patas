@@ -42,9 +42,11 @@ Version 1 tracks debts **you owe**. It does not track money other people owe you
 - **Optional app lock:** a 4-digit MPIN, off by default. Asked when the app opens and after 30 minutes away. Checked on the server; after 5 wrong tries you need an email code.
 - **Sign in with a 6-digit email code.** No password to remember or leak. A bot check protects sign-in.
 - **Works offline.** Saves land on your phone and sync when you're back online.
-- **Backup and restore** to a file. **Delete my account** removes everything, including your QR files.
-- **Light, dark or system,** and six colour themes (default Ink blue).
-- Peso (₱) by default. You can change the currency symbol for display; there is no conversion. English only.
+- **Photos** for you and for each person you owe, kept private like QR codes.
+- **Backup and restore** to a file. **Delete my account** removes everything, including your QR files and photos.
+- **Light, dark or system,** and six colour themes (default Patas violet).
+- Peso (₱) by default. Each debt can have its own currency; totals across currencies are converted for display
+  only (marked ≈) using public exchange rates. English only.
 
 ## Screenshots
 
@@ -64,12 +66,16 @@ Version 1 tracks debts **you owe**. It does not track money other people owe you
 
 ## Privacy
 
-> Your debts and saved QR codes are private: other Patas users can't see them. I run this server and can
-> technically access what is stored. I don't browse it; I would only look to fix a problem you report or
+> Your debts, saved QR codes and photos are private: other Patas users can't see them. I run this server and
+> can technically access what is stored. I don't browse it; I would only look to fix a problem you report or
 > where the law requires. It is never sold or used for ads. It is stored by Supabase (database and files)
 > and served by Vercel; reminders reach your phone through its push service (Google, Apple, Mozilla or
-> Microsoft), encrypted. Deleted items disappear from your lists at once and stay hidden on the server
-> until you delete your account; "Delete my account" removes all your data and QR files.
+> Microsoft), encrypted. Exchange rates come from open.er-api.com or Frankfurter. They see your currency
+> code and, like any website, your internet address; nothing else. A QR you save holds the account or mobile
+> number of the person you pay, and a photo of someone you owe is their personal data: keep to what you
+> need. Photos sit in a private store, like QR files. Deleted items disappear from your lists at once and
+> stay hidden on the server until you delete your account; "Delete my account" removes all your data, QR
+> files and photos.
 
 This is the short version of the notice inside the app. Contact: joemarkudemy@gmail.com. You can also complain
 to the [National Privacy Commission](https://privacy.gov.ph). If you run your own copy (below), you run your
@@ -78,9 +84,9 @@ own server and make your own privacy promise.
 ## How it was built
 
 Designed and built by Joemark Basa, with Claude (an AI) as the engineer, and an AI security reviewer and an AI
-design reviewer checking the work. Every feature is backed by tests: 83 app tests, 97 privacy checks, 67
-reminder and MPIN checks, an end-to-end check of ten steps, and 59 deliberately planted bugs that the tests
-had to catch (all 59 were caught).
+design reviewer checking the work. Every feature is backed by tests: 106 app tests, 99 privacy checks, 73
+checks of the round 4 database changes, 67 reminder and MPIN checks, an end-to-end check of ten steps, and 83
+deliberately planted bugs that the tests had to catch (all 83 were caught).
 
 ## Tech stack
 

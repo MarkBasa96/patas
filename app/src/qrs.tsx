@@ -7,11 +7,11 @@ import React, { createContext, useCallback, useContext, useEffect, useMemo, useR
 import { newId } from './ids';
 import { isWallet, matches, qrFingerprint, type QrForm, type QrRow } from './qr';
 import { cacheDrop, cacheGet, cachePut } from './qrCache';
+import { qrRowsKey } from './keys';
 import { decodeQr } from './qrDecode';
 import { supabase } from './supabase';
 
 const COLS = 'id,label,wallet,account_name,storage_path,payload_sha256,added_at,last_copy_saved_at,replaces_id,old_copy_saved_at,created_at,deleted';
-export const qrRowsKey = (uid: string) => `patas.qr.v1.${uid}`;
 
 const str = (v: unknown, d = '') => (typeof v === 'string' ? v : d);
 const strOrNull = (v: unknown) => (typeof v === 'string' ? v : null);

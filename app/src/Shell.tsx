@@ -1,20 +1,24 @@
+// The app frame (round 4): four tabs over a glass tab bar, pushed screens that fade in, Settings as a sheet.
 import React, { useEffect, useRef, useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { startBackNav, useBackHandler } from './backNav';
 import { DebtDetail } from './DebtDetail';
 import { DebtForm } from './DebtForm';
-import { DebtsScreen } from './DebtsScreen';
+import { DebtsScreen, type DebtFilter } from './DebtsScreen';
 import { HomeScreen } from './HomeScreen';
+import { Icon, type IconName } from './icons';
+import type { LineFormKind } from './lines';
+import { LineFormScreen } from './LineFormScreen';
+import { Press } from './motion';
+import { PersonScreen } from './PersonScreen';
+import { QrFormScreen, QrGallery, QrShow } from './QrScreens';
+import { refreshHere } from './reminders';
 import { ReportsScreen } from './ReportsScreen';
 import { ScheduleScreen } from './ScheduleScreen';
-import { LineFormScreen } from './LineFormScreen';
-import { Icon, type IconName } from './icons';
-import { SettingsScreen } from './SettingsScreen';
-import { QrFormScreen, QrGallery, QrShow } from './QrScreens';
+import { SettingsSheet } from './SettingsScreen';
 import { useSettings } from './settings';
-import { refreshHere } from './reminders';
 import { useStore } from './store';
 import { Banner } from './ui';
 
@@ -28,23 +32,26 @@ const TABS: { key: TabKey; label: string; icon: IconName }[] = [
 
 type Route =
   | { name: 'tabs' }
-  | { name: 'add' }
-  | { name: 'detail'; id: string }
+  | { name: 'add'; person?: string; from?: Route }
+  | { name: 'detail'; id: string; from?: Route }
   | { name: 'edit'; id: string }
-  | { name: 'line'; id: string; kind: 'payment' | 'charge'; editId?: string }
+  | { name: 'person'; key: string; from?: Route }
+  | { name: 'line'; id: string; kind: LineFormKind; editId?: string; back?: Route }
   | { name: 'qr' }
-  | { name: 'qrshow'; id: string; from?: string }
-  | { name: 'qrform'; editId?: string; replaceId?: string; person?: string; from?: string };
+  | { name: 'qrshow'; id: string; back?: Route }
+  | { name: 'qrform'; editId?: string; replaceId?: string; person?: string; back?: Route };
 
 export function Shell({ userId }: { userId: string }) {
   const { t } = useSettings();
   const insets = useSafeAreaInsets();
   const { status, pending, refused } = useStore();
   const [tab, setTab] = useState<TabKey>('home');
+  const [filter, setFilter] = useState<DebtFilter>('all');
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [route, setRoute] = useState<Route>({ name: 'tabs' });
-
-  const toDebts = () => { setTab('debts'); setRoute({ name: 'tabs' }); };
+  const tabs: Route = { name: 'tabs' };
+  const go = (r: Route) => setRoute(r);
+  const back = (r?: Route) => setRoute(r ?? tabs);
 
   // iPhone can drop a reminder subscription silently: re-save it on every open while permission holds.
   useEffect(() => { void refreshHere().catch(() => {}); }, []);
@@ -61,119 +68,144 @@ export function Shell({ userId }: { userId: string }) {
       }),
     [],
   );
-  const detailId = route.name === 'edit' || route.name === 'line' || route.name === 'detail' ? route.id : '';
-  useBackHandler(route.name === 'add' || route.name === 'detail', toDebts);
-  useBackHandler(route.name === 'edit' || route.name === 'line', () => setRoute({ name: 'detail', id: detailId }));
-  // QR screens go back to where they were opened from: a debt, or the gallery.
-  const qrBack = (from?: string) => setRoute(from ? { name: 'detail', id: from } : { name: 'qr' });
-  const qrFrom = route.name === 'qrshow' || route.name === 'qrform' ? route.from : undefined;
-  useBackHandler(route.name === 'qr', () => setRoute({ name: 'tabs' }));
-  useBackHandler(route.name === 'qrshow' || route.name === 'qrform', () => qrBack(qrFrom));
-  useBackHandler(route.name === 'tabs' && settingsOpen, () => setSettingsOpen(false));
+  const routeBack = (): Route => {
+    switch (route.name) {
+      case 'add': case 'detail': case 'person': return route.from ?? tabs;
+      case 'edit': return { name: 'detail', id: route.id };
+      case 'line': return route.back ?? { name: 'detail', id: route.id };
+      case 'qrshow': case 'qrform': return route.back ?? { name: 'qr' };
+      default: return tabs;
+    }
+  };
+  useBackHandler(route.name !== 'tabs', () => back(routeBack()));
   useBackHandler(route.name === 'tabs' && !settingsOpen && tab !== 'home', () => setTab('home'));
-  if (route.name === 'add') return <DebtForm onClose={toDebts} onSaved={(id) => setRoute({ name: 'detail', id })} />;
-  if (route.name === 'edit') return <DebtForm editId={route.id} onClose={() => setRoute({ name: 'detail', id: route.id })} onSaved={(id) => setRoute({ name: 'detail', id })} />;
-  if (route.name === 'line') return <LineFormScreen debtId={route.id} kind={route.kind} editId={route.editId} onClose={() => setRoute({ name: 'detail', id: route.id })} />;
-  if (route.name === 'detail')
-    return (
+
+  const openDetail = (id: string) => go({ name: 'detail', id, from: route });
+  const openPerson = (key: string) => go({ name: 'person', key, from: route });
+  const here = route;
+
+  let screen: React.ReactNode = null;
+  if (route.name === 'add') screen = <DebtForm person={route.person} onClose={() => back(route.from)} onSaved={(id) => go({ name: 'detail', id, from: route.from })} />;
+  else if (route.name === 'edit') screen = <DebtForm editId={route.id} onClose={() => back({ name: 'detail', id: route.id })} onSaved={(id) => go({ name: 'detail', id })} />;
+  else if (route.name === 'line') screen = <LineFormScreen debtId={route.id} kind={route.kind} editId={route.editId} onClose={() => back(route.back ?? { name: 'detail', id: route.id })} />;
+  else if (route.name === 'detail')
+    screen = (
       <DebtDetail
         id={route.id}
-        onBack={toDebts}
-        onEdit={() => setRoute({ name: 'edit', id: route.id })}
-        onDeleted={toDebts}
-        onLine={(kind, editId) => setRoute({ name: 'line', id: route.id, kind, editId })}
-        onShowQr={(qrId) => setRoute({ name: 'qrshow', id: qrId, from: route.id })}
-        onAddQr={(person) => setRoute({ name: 'qrform', person, from: route.id })}
+        back={route.from?.name === 'person' ? 'Back' : route.from?.name === 'tabs' && tab === 'home' ? 'Home' : 'My debts'}
+        onBack={() => back(route.from)}
+        onEdit={() => go({ name: 'edit', id: route.id })}
+        onDeleted={() => back(route.from)}
+        onBorrowAgain={(person) => go({ name: 'add', person, from: here })}
+        onLine={(kind, editId) => go({ name: 'line', id: route.id, kind, editId, back: here })}
+        onShowQr={(qrId) => go({ name: 'qrshow', id: qrId, back: here })}
+        onAddQr={(person) => go({ name: 'qrform', person, back: here })}
+        onPerson={openPerson}
       />
     );
-  if (route.name === 'qr') return <QrGallery onBack={() => setRoute({ name: 'tabs' })} onOpen={(id) => setRoute({ name: 'qrshow', id })} onAdd={() => setRoute({ name: 'qrform' })} />;
-  if (route.name === 'qrform') {
-    const back = route.editId ?? route.replaceId;
-    return (
+  else if (route.name === 'person')
+    screen = (
+      <PersonScreen
+        personKey={route.key}
+        onBack={() => back(route.from)}
+        onOpen={(id) => go({ name: 'detail', id, from: here })}
+        onBorrowAgain={(person) => go({ name: 'add', person, from: here })}
+        onShowQr={(id) => go({ name: 'qrshow', id, back: here })}
+        onAddQr={(person) => go({ name: 'qrform', person, back: here })}
+      />
+    );
+  else if (route.name === 'qr') screen = <QrGallery onBack={() => back()} onOpen={(id) => go({ name: 'qrshow', id })} onAdd={() => go({ name: 'qrform' })} />;
+  else if (route.name === 'qrform') {
+    const r = route;
+    const backTo = r.editId ?? r.replaceId;
+    screen = (
       <QrFormScreen
-        editId={route.editId}
-        replaceId={route.replaceId}
-        person={route.person}
-        onClose={() => (back ? setRoute({ name: 'qrshow', id: back, from: route.from }) : qrBack(route.from))}
-        onSaved={(id) => setRoute({ name: 'qrshow', id, from: route.from })}
+        editId={r.editId}
+        replaceId={r.replaceId}
+        person={r.person}
+        onClose={() => (backTo ? go({ name: 'qrshow', id: backTo, back: r.back }) : back(r.back ?? { name: 'qr' }))}
+        onSaved={(id) => go({ name: 'qrshow', id, back: r.back })}
+      />
+    );
+  } else if (route.name === 'qrshow') {
+    const r = route;
+    screen = (
+      <QrShow
+        id={r.id}
+        userId={userId}
+        onBack={() => back(r.back ?? { name: 'qr' })}
+        onEdit={() => go({ name: 'qrform', editId: r.id, back: r.back })}
+        onReplace={() => go({ name: 'qrform', replaceId: r.id, back: r.back })}
+        onRemoved={() => back(r.back ?? { name: 'qr' })}
+        onLogPayment={(debtId) => go({ name: 'line', id: debtId, kind: 'payment', back: here })}
       />
     );
   }
-  if (route.name === 'qrshow')
-    return (
-      <QrShow
-        id={route.id}
-        userId={userId}
-        onBack={() => qrBack(route.from)}
-        onEdit={() => setRoute({ name: 'qrform', editId: route.id, from: route.from })}
-        onReplace={() => setRoute({ name: 'qrform', replaceId: route.id, from: route.from })}
-        onRemoved={() => qrBack(route.from)}
-        onLogPayment={(debtId) => setRoute({ name: 'line', id: debtId, kind: 'payment' })}
-      />
-    );
 
   const syncNote = refused > 0 ? `${refused} change${refused === 1 ? '' : 's'} could not be saved to the cloud.` : status === 'offline' ? (pending > 0 ? `Offline. ${pending} change${pending === 1 ? '' : 's'} saved on this phone, waiting to sync.` : 'Offline. You can keep working; changes sync later.') : pending > 0 && status !== 'loading' ? 'Saved on this phone. Syncing…' : null;
+  const notes = (
+    <>
+      {showExit ? <View style={s.note}><Banner text="Press back again to exit" /></View> : null}
+      {syncNote ? <View style={s.note}><Banner tone={refused > 0 ? 'warn' : 'info'} text={syncNote} /></View> : null}
+    </>
+  );
+  const settings = <SettingsSheet visible={settingsOpen} userId={userId} onClose={() => setSettingsOpen(false)} onOpenQr={() => go({ name: 'qr' })} />;
 
+  if (screen) {
+    return (
+      <View style={[s.fill, { backgroundColor: t.bg }]}>
+        <View key={`${route.name}:${'id' in route ? route.id : ''}:${'key' in route ? route.key : ''}:${route.name === 'line' ? route.kind + (route.editId ?? '') : ''}`} style={s.fill} {...({ dataSet: { anim: 'screen' } } as object)}>{screen}</View>
+        {showExit ? <View pointerEvents="none" style={[s.notes, { bottom: insets.bottom + 90 }]}><View style={s.note}><Banner text="Press back again to exit" /></View></View> : null}
+        {settings}
+      </View>
+    );
+  }
+
+  const openSettings = () => setSettingsOpen(true);
   return (
     <View style={[s.fill, { backgroundColor: t.bg, paddingTop: insets.top }]}>
-      <View style={s.appbar}>
-        <Text style={[s.brand, { color: t.text }]}>Patas</Text>
-        <Pressable accessibilityRole="button" accessibilityLabel="Settings" onPress={() => setSettingsOpen((v) => !v)} style={[s.avatar, { backgroundColor: t.accentSoft }]}>
-          <Text style={[s.avatarText, { color: t.accent }]}>{settingsOpen ? '×' : 'P'}</Text>
-        </Pressable>
+      {notes}
+      <View key={tab} style={s.fill} {...({ dataSet: { anim: 'screen' } } as object)}>
+        {tab === 'debts' ? (
+          <DebtsScreen filter={filter} onFilter={setFilter} onAdd={() => go({ name: 'add', from: tabs })} onOpen={openDetail} onPerson={openPerson} onQr={() => go({ name: 'qr' })} onSettings={openSettings} />
+        ) : tab === 'schedule' ? (
+          <ScheduleScreen onOpen={openDetail} onSettings={openSettings} />
+        ) : tab === 'reports' ? (
+          <ReportsScreen onSettings={openSettings} />
+        ) : (
+          <HomeScreen
+            onOpen={openDetail}
+            onPerson={openPerson}
+            onTab={(k) => { if (k === 'debts') setFilter('all'); setTab(k); }}
+            onOverdue={() => { setFilter('overdue'); setTab('debts'); }}
+            onEditLine={(debtId, lineId) => go({ name: 'line', id: debtId, kind: 'payment', editId: lineId, back: tabs })}
+            onSettings={openSettings}
+          />
+        )}
       </View>
-      {showExit ? <View style={{ paddingHorizontal: 16 }}><Banner text="Press back again to exit" /></View> : null}
-      {syncNote ? <View style={{ paddingHorizontal: 16 }}><Banner tone={refused > 0 ? 'warn' : 'info'} text={syncNote} /></View> : null}
 
-      {settingsOpen ? (
-        <SettingsScreen userId={userId} onOpenQr={() => setRoute({ name: 'qr' })} />
-      ) : tab === 'debts' ? (
-        <DebtsScreen onAdd={() => setRoute({ name: 'add' })} onOpen={(id) => setRoute({ name: 'detail', id })} />
-      ) : tab === 'schedule' ? (
-        <ScheduleScreen onOpen={(id) => setRoute({ name: 'detail', id })} />
-      ) : tab === 'reports' ? (
-        <ReportsScreen onOpen={(id) => setRoute({ name: 'detail', id })} />
-      ) : (
-        <HomeScreen
-          onAdd={() => setRoute({ name: 'add' })}
-          onOpen={(id) => setRoute({ name: 'detail', id })}
-          onTab={(k) => setTab(k)}
-          onLogPayment={(id) => setRoute({ name: 'line', id, kind: 'payment' })}
-        />
-      )}
-
-      <View style={[s.tabbar, { backgroundColor: t.surface, borderTopColor: t.border, paddingBottom: Math.max(insets.bottom, 6) }]} accessibilityRole="tablist">
+      <View style={[s.tabbar, { backgroundColor: t.tabGlass, borderTopColor: t.tabBorder, paddingBottom: Math.max(insets.bottom, 6) }]} accessibilityRole="tablist" {...({ dataSet: { glass: 'bar' } } as object)}>
         {TABS.map((x) => {
-          const on = !settingsOpen && tab === x.key;
+          const on = tab === x.key;
           const color = on ? t.accent : t.muted;
           return (
-            <Pressable key={x.key} accessibilityRole="tab" accessibilityState={{ selected: on }} onPress={() => { setSettingsOpen(false); setTab(x.key); }} style={[s.tab, on && { backgroundColor: t.accentSoft }]}>
+            <Press key={x.key} accessibilityRole="tab" accessibilityState={{ selected: on }} onPress={() => setTab(x.key)} style={[s.tab, on && { backgroundColor: t.accentSoft }]}>
               <Icon name={x.icon} color={color} />
-              <Text style={[s.tabLabel, { color, fontFamily: on ? 'Inter_600SemiBold' : 'Inter_500Medium' }]}>{x.label}</Text>
-            </Pressable>
+              <Text style={[s.tabLabel, { color, fontFamily: on ? 'Manrope_600' : 'Manrope_500' }]}>{x.label}</Text>
+            </Press>
           );
         })}
       </View>
+      {settings}
     </View>
   );
 }
 
 const s = StyleSheet.create({
   fill: { flex: 1 },
-  appbar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 5 }, // 5 + a 44px avatar = the old 8 + 38px bar height
-  brand: { fontFamily: 'Inter_800ExtraBold', fontSize: 19, letterSpacing: 0.2 },
-  avatar: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
-  avatarText: { fontFamily: 'Inter_700Bold', fontSize: 15 },
-  body: { paddingHorizontal: 16, paddingBottom: 24 },
-  h1: { fontFamily: 'Inter_800ExtraBold', fontSize: 26, marginTop: 6, marginBottom: 10, letterSpacing: -0.3 },
-  card: { borderRadius: 18, borderWidth: 1, padding: 16 },
-  cardTitle: { fontFamily: 'Inter_700Bold', fontSize: 17, marginBottom: 10 },
-  cardText: { fontFamily: 'Inter_400Regular', fontSize: 15, lineHeight: 21 },
-  peso: { fontFamily: 'Inter_800ExtraBold', fontSize: 34, marginTop: 10, letterSpacing: -0.8 },
-  row: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  pill: { borderWidth: 1, borderRadius: 999, paddingHorizontal: 14, paddingVertical: 7 },
-  swatch: { width: 34, height: 34, borderRadius: 17, borderWidth: 3 },
-  tabbar: { flexDirection: 'row', gap: 2, paddingHorizontal: 10, paddingTop: 8, borderTopWidth: 1 },
-  tab: { flex: 1, alignItems: 'center', gap: 3, paddingVertical: 7, borderRadius: 16 },
+  note: { paddingHorizontal: 16 },
+  notes: { position: 'absolute', left: 0, right: 0 },
+  tabbar: { flexDirection: 'row', gap: 2, paddingHorizontal: 10, paddingTop: 6, borderTopWidth: 1 },
+  tab: { flex: 1, alignItems: 'center', gap: 3, paddingVertical: 7, borderRadius: 16, minHeight: 52, justifyContent: 'center' },
   tabLabel: { fontSize: 11 },
 });

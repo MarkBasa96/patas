@@ -4,6 +4,9 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Modal, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { personKey } from './insights';
+import { Header } from './kit';
+import { useToast } from './motion';
 import { formatLong, todayIso } from './plan';
 import { copyFileName, inFilter, matches, namesAgree, payeeName, qrTitle, qrWarning, randomTag, validateQrForm, WALLETS, walletLabel, type QrForm, type QrRow, type QrWarning } from './qr';
 import { buildCopy, preparePicked } from './qrImage';
@@ -40,15 +43,10 @@ const useNow = () => useState(() => Date.now())[0];
 const hasBlob = (p: Pic): p is Extract<Picture, { blob: Blob }> => 'blob' in p;
 
 function Head({ title, onBack, right }: { title: string; onBack: () => void; right?: React.ReactNode }) {
-  const { t } = useSettings();
   const insets = useSafeAreaInsets();
   return (
-    <View style={[s.head, { paddingTop: insets.top + 6 }]}>
-      <Pressable accessibilityRole="button" accessibilityLabel="Back" onPress={onBack} style={{ minWidth: 64, minHeight: 44, justifyContent: 'center' }}>
-        <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 16, color: t.accent }}>‹ Back</Text>
-      </Pressable>
-      <Text numberOfLines={1} style={[s.title, { color: t.text }]}>{title}</Text>
-      <View style={{ minWidth: 64, alignItems: 'flex-end' }}>{right}</View>
+    <View style={{ paddingTop: insets.top, paddingHorizontal: 16, width: '100%', maxWidth: 560, alignSelf: 'center' }}>
+      <Header back="Back" onBack={onBack} title={title} right={right} />
     </View>
   );
 }
@@ -57,7 +55,7 @@ function WalletTag({ wallet }: { wallet: string }) {
   const { t } = useSettings();
   return (
     <View style={{ alignSelf: 'flex-start', borderRadius: 999, paddingHorizontal: 10, paddingVertical: 3, backgroundColor: t.accentSoft }}>
-      <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 12, color: t.accent }}>{walletLabel(wallet)}</Text>
+      <Text style={{ fontFamily: 'Manrope_600', fontSize: 12, color: t.accent }}>{walletLabel(wallet)}</Text>
     </View>
   );
 }
@@ -87,7 +85,7 @@ export function QrGallery({ onBack, onOpen, onAdd }: { onBack: () => void; onOpe
     <View style={{ flex: 1, backgroundColor: t.bg }}>
       <Head title="QR gallery" onBack={onBack} />
       <ScrollView contentContainerStyle={[s.body, { paddingBottom: 120 }]}>
-        <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 14, color: t.muted, marginBottom: 10 }}>Keep payment QR codes linked to the people you owe.</Text>
+        <Text style={{ fontFamily: 'Manrope_400', fontSize: 14, color: t.muted, marginBottom: 10 }}>Keep payment QR codes linked to the people you owe.</Text>
         {qrs.length > 3 ? <Input value={q} onChangeText={setQ} placeholder="Search name or payment method" label="Search QR codes" /> : null}
         <View style={[s.row, { marginVertical: 12 }]}>
           {(['all', 'gcash', 'maya', 'banks'] as const).map((k) => (
@@ -102,11 +100,11 @@ export function QrGallery({ onBack, onOpen, onAdd }: { onBack: () => void; onOpe
         </View>
         {!qrs.length ? (
           <View style={[s.card, { backgroundColor: t.surface, borderColor: t.border, alignItems: 'center', paddingVertical: 28 }]}>
-            <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 17, color: t.text }}>No QR codes yet</Text>
-            <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 14, color: t.muted, marginTop: 4, textAlign: 'center' }}>Save a payment QR so paying someone is one tap.</Text>
+            <Text style={{ fontFamily: 'Manrope_700', fontSize: 17, color: t.text }}>No QR codes yet</Text>
+            <Text style={{ fontFamily: 'Manrope_400', fontSize: 14, color: t.muted, marginTop: 4, textAlign: 'center' }}>Save a payment QR so paying someone is one tap.</Text>
           </View>
         ) : null}
-        <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 13, color: t.muted, marginTop: 12 }}>QR pictures are private to you. They stay out of backups unless you choose to include them.</Text>
+        <Text style={{ fontFamily: 'Manrope_400', fontSize: 13, color: t.muted, marginTop: 12 }}>QR pictures are private to you. They stay out of backups unless you choose to include them.</Text>
       </ScrollView>
       <View style={[s.save, { backgroundColor: t.bg, borderTopColor: t.border, paddingBottom: Math.max(insets.bottom, 12) }]}>
         <Button label="+ Add QR" onPress={onAdd} />
@@ -123,12 +121,12 @@ function QrCard({ row, title, onPress }: { row: QrRow; title: string; onPress: (
   return (
     <Pressable accessibilityRole="button" accessibilityLabel={`${title}, ${walletLabel(row.wallet)}`} onPress={onPress} style={[s.qcard, { backgroundColor: t.surface, borderColor: warn ? t.warn : t.border }]}>
       <View style={[s.qthumb, { backgroundColor: '#FFFFFF' }]}>
-        {hasBlob(pic) ? <QrImg blob={pic.blob} size={112} label="Saved QR" /> : <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 12, color: '#5B6270', textAlign: 'center' }}>{'state' in pic ? 'Loading…' : pic.problem === 'mismatch' ? 'Does not match' : 'Not on this phone yet'}</Text>}
+        {hasBlob(pic) ? <QrImg blob={pic.blob} size={112} label="Saved QR" /> : <Text style={{ fontFamily: 'Manrope_600', fontSize: 12, color: '#5B6270', textAlign: 'center' }}>{'state' in pic ? 'Loading…' : pic.problem === 'mismatch' ? 'Does not match' : 'Not on this phone yet'}</Text>}
       </View>
-      <Text numberOfLines={2} style={{ fontFamily: 'Inter_700Bold', fontSize: 14, color: t.text, marginTop: 8 }}>{title}</Text>
+      <Text numberOfLines={2} style={{ fontFamily: 'Manrope_700', fontSize: 14, color: t.text, marginTop: 8 }}>{title}</Text>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 6 }}>
         <WalletTag wallet={row.wallet} />
-        {warn ? <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 12, color: t.warn }}>{warn.kind === 'changed' ? 'Changed' : 'New'}</Text> : null}
+        {warn ? <Text style={{ fontFamily: 'Manrope_600', fontSize: 12, color: t.warn }}>{warn.kind === 'changed' ? 'Changed' : 'New'}</Text> : null}
       </View>
     </Pressable>
   );
@@ -142,7 +140,9 @@ export function QrFormScreen({ editId, replaceId, person, onClose, onSaved }: { 
   const { views, linkQr, moveQrLinks, debtsUsingQr } = useStore();
   const old = qrs.find((r) => r.id === (editId ?? replaceId));
   const linkedNow = old ? (debtsUsingQr(old.id)[0]?.debt.person_name ?? null) : null;
-  const people = useMemo(() => [...new Set(views.filter((v) => v.debt.settled_on === null).map((v) => v.debt.person_name))].sort((a, b) => a.localeCompare(b)), [views]);
+  // One QR per person (round 4): everyone you owe, one name each (same name in any case is one person).
+  const people = useMemo(() => { const m = new Map<string, string>(); for (const v of views) { const k = personKey(v.debt.person_name); if (k && !m.has(k)) m.set(k, v.debt.person_name.trim()); } return [...m.values()].sort((a, b) => a.localeCompare(b)); }, [views]);
+  const toast = useToast();
   const [form, setForm] = useState<QrForm>({ label: old?.label ?? '', wallet: old?.wallet ?? 'gcash', account: old?.account_name ?? '', person: old ? linkedNow : (person ?? null) });
   const [picked, setPicked] = useState<{ png: Blob; text: string } | null>(null);
   const [pickErr, setPickErr] = useState<string | null>(null);
@@ -155,6 +155,7 @@ export function QrFormScreen({ editId, replaceId, person, onClose, onSaved }: { 
   const editing = !!editId;
   const errors = validateQrForm(form, editing || !!picked);
   const name = picked ? payeeName(picked.text) : '';
+  const otherQr = form.person ? views.find((v) => v.debt.qr_id && v.debt.qr_id !== old?.id && personKey(v.debt.person_name) === personKey(form.person ?? ''))?.debt.qr_id : undefined;
 
   async function onFile(file: File | undefined) {
     if (!file) return;
@@ -181,6 +182,7 @@ export function QrFormScreen({ editId, replaceId, person, onClose, onSaved }: { 
       if (err) return (setBusy(false), setProblem(err));
       linkQr(old.id, form.person);
       setBusy(false);
+      toast('QR saved');
       return onSaved(old.id);
     }
     if (!picked) return setBusy(false);
@@ -192,6 +194,7 @@ export function QrFormScreen({ editId, replaceId, person, onClose, onSaved }: { 
     }
     linkQr(r.id, form.person);
     setBusy(false);
+    toast('QR saved');
     onSaved(r.id);
   }
 
@@ -206,12 +209,12 @@ export function QrFormScreen({ editId, replaceId, person, onClose, onSaved }: { 
               {picked ? (
                 <View style={{ alignItems: 'center', gap: 8 }}>
                   <QrImg blob={picked.png} size={180} label="QR you picked" />
-                  <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 13, color: t.accent }}>Choose a different picture</Text>
+                  <Text style={{ fontFamily: 'Manrope_600', fontSize: 13, color: t.accent }}>Choose a different picture</Text>
                 </View>
               ) : (
                 <View style={{ alignItems: 'center' }}>
-                  <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 16, color: t.text }}>{reading ? 'Reading the QR…' : 'Choose QR picture'}</Text>
-                  <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 13, color: t.muted, marginTop: 4 }}>A screenshot from the payment app works best. JPG or PNG, up to 5 MB.</Text>
+                  <Text style={{ fontFamily: 'Manrope_700', fontSize: 16, color: t.text }}>{reading ? 'Reading the QR…' : 'Choose QR picture'}</Text>
+                  <Text style={{ fontFamily: 'Manrope_400', fontSize: 13, color: t.muted, marginTop: 4 }}>A screenshot from the payment app works best. JPG or PNG, up to 5 MB.</Text>
                 </View>
               )}
             </Pressable>
@@ -228,7 +231,7 @@ export function QrFormScreen({ editId, replaceId, person, onClose, onSaved }: { 
                   },
                 })
               : null}
-            {picked ? <Text style={{ fontFamily: 'Inter_500Medium', fontSize: 13, color: t.muted, marginTop: 8 }}>{name ? `Name in the QR: ${name}` : 'This QR has no name in it. Check it in your payment app before you pay.'}</Text> : null}
+            {picked ? <Text style={{ fontFamily: 'Manrope_500', fontSize: 13, color: t.muted, marginTop: 8 }}>{name ? `Name in the QR: ${name}` : 'This QR has no name in it. Check it in your payment app before you pay.'}</Text> : null}
             {picked && name && form.account.trim() && !namesAgree(name, form.account) ? <View style={{ marginTop: 8 }}><Banner tone="warn" text={`The name in this QR (${name}) is not the account name below. Make sure this QR pays the right person.`} /></View> : null}
           </Field>
         ) : null}
@@ -241,6 +244,7 @@ export function QrFormScreen({ editId, replaceId, person, onClose, onSaved }: { 
               <Chip key={p} label={p} on={form.person === p} onPress={() => setForm((x) => ({ ...x, person: p }))} />
             ))}
           </View>
+          {form.person ? <Text style={{ fontFamily: 'Manrope_500', fontSize: 13, color: otherQr ? t.peachInk : t.muted, marginTop: 6 }}>{otherQr ? `${form.person} already has a QR. Saving uses this one for all their debts instead, with a warning on them for 14 days.` : 'Every debt with this person uses it, new ones too.'}</Text> : null}
         </Field>
         <Field label="Payment method">
           <View accessibilityRole="radiogroup" accessibilityLabel="Payment method" style={s.row}>
@@ -251,7 +255,7 @@ export function QrFormScreen({ editId, replaceId, person, onClose, onSaved }: { 
         </Field>
         <Field label="Account name" error={tried ? errors.account : undefined}>
           <Input value={form.account} onChangeText={(v) => setForm((x) => ({ ...x, account: v }))} placeholder="Name on the account" label="Account name" maxLength={60} />
-          <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 12, color: t.muted, marginTop: 6 }}>Names only. Patas never stores account numbers as text.</Text>
+          <Text style={{ fontFamily: 'Manrope_400', fontSize: 12, color: t.muted, marginTop: 6 }}>Names only. Patas never stores account numbers as text.</Text>
         </Field>
         <Field label="Label" optional error={tried ? errors.label : undefined}>
           <Input value={form.label} onChangeText={(v) => setForm((x) => ({ ...x, label: v }))} placeholder="Personal GCash" label="Label" maxLength={40} />
@@ -294,7 +298,7 @@ export function QrShow({ id, userId, onBack, onEdit, onReplace, onRemoved, onLog
     return (
       <View style={{ flex: 1, backgroundColor: t.bg }}>
         <Head title="QR" onBack={onBack} />
-        <View style={s.body}><Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 16, color: t.text }}>That QR is not here any more.</Text></View>
+        <View style={s.body}><Text style={{ fontFamily: 'Manrope_600', fontSize: 16, color: t.text }}>That QR is not here any more.</Text></View>
       </View>
     );
   }
@@ -308,7 +312,7 @@ export function QrShow({ id, userId, onBack, onEdit, onReplace, onRemoved, onLog
 
   return (
     <View style={{ flex: 1, backgroundColor: t.bg }}>
-      <Head title={title} onBack={onBack} right={<Pressable accessibilityRole="button" accessibilityLabel="More" onPress={() => setMenu((m) => !m)} style={{ minWidth: 44, minHeight: 44, alignItems: 'flex-end', justifyContent: 'center' }}><Text style={{ fontFamily: 'Inter_800ExtraBold', fontSize: 22, color: t.accent }}>⋯</Text></Pressable>} />
+      <Head title={title} onBack={onBack} right={<Pressable accessibilityRole="button" accessibilityLabel="More" onPress={() => setMenu((m) => !m)} style={{ minWidth: 44, minHeight: 44, alignItems: 'flex-end', justifyContent: 'center' }}><Text style={{ fontFamily: 'Manrope_700', fontSize: 22, color: t.accent }}>⋯</Text></Pressable>} />
       {menu ? (
         <View style={[s.menu, { backgroundColor: t.surface, borderColor: t.border, top: insets.top + 58 }]}>
           <MenuItem label="Edit details" onPress={() => { setMenu(false); onEdit(); }} />
@@ -325,33 +329,33 @@ export function QrShow({ id, userId, onBack, onEdit, onReplace, onRemoved, onLog
         {wtext ? <Banner tone="warn" text={wtext} /> : null}
         {'problem' in pic && pic.problem !== 'mismatch' ? <Banner text="Open this QR once while online to see it here offline." /> : null}
         <View style={[s.big, { backgroundColor: '#FFFFFF', borderColor: t.border }]}>
-          {hasBlob(pic) ? <QrImg blob={pic.blob} size={260} label="Your payment QR code" /> : <View style={{ width: 260, height: 260, alignItems: 'center', justifyContent: 'center' }}><Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 14, color: '#5B6270' }}>{'state' in pic ? 'Loading QR…' : 'QR hidden'}</Text></View>}
+          {hasBlob(pic) ? <QrImg blob={pic.blob} size={260} label="Your payment QR code" /> : <View style={{ width: 260, height: 260, alignItems: 'center', justifyContent: 'center' }}><Text style={{ fontFamily: 'Manrope_600', fontSize: 14, color: '#5B6270' }}>{'state' in pic ? 'Loading QR…' : 'QR hidden'}</Text></View>}
         </View>
         <View style={[s.card, { backgroundColor: t.surface, borderColor: t.border }]}>
-          <Text style={{ fontFamily: 'Inter_500Medium', fontSize: 13, color: t.muted }}>Account name</Text>
+          <Text style={{ fontFamily: 'Manrope_500', fontSize: 13, color: t.muted }}>Account name</Text>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 2 }}>
-            <Text style={{ flex: 1, fontFamily: 'Inter_700Bold', fontSize: 18, color: t.text }}>{row.account_name}</Text>
+            <Text style={{ flex: 1, fontFamily: 'Manrope_700', fontSize: 18, color: t.text }}>{row.account_name}</Text>
             <Pressable accessibilityRole="button" onPress={() => { void navigator.clipboard?.writeText(row.account_name).then(() => setNotice('Name copied.')).catch(() => undefined); }} style={{ minHeight: 44, justifyContent: 'center' }}>
-              <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 14, color: t.accent }}>Copy name</Text>
+              <Text style={{ fontFamily: 'Manrope_600', fontSize: 14, color: t.accent }}>Copy name</Text>
             </Pressable>
           </View>
-          {hasBlob(pic) ? <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 13, color: t.muted, marginTop: 8 }}>{payee ? `Name in the QR: ${payee}` : 'This QR has no name in it. Check it in your payment app before you pay.'}</Text> : null}
-          {row.label ? <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 13, color: t.muted, marginTop: 4 }}>Label: {row.label}</Text> : null}
-          <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 13, color: t.muted, marginTop: 4 }}>QR set on {formatLong(row.added_at.slice(0, 10))}</Text>
+          {hasBlob(pic) ? <Text style={{ fontFamily: 'Manrope_400', fontSize: 13, color: t.muted, marginTop: 8 }}>{payee ? `Name in the QR: ${payee}` : 'This QR has no name in it. Check it in your payment app before you pay.'}</Text> : null}
+          {row.label ? <Text style={{ fontFamily: 'Manrope_400', fontSize: 13, color: t.muted, marginTop: 4 }}>Label: {row.label}</Text> : null}
+          <Text style={{ fontFamily: 'Manrope_400', fontSize: 13, color: t.muted, marginTop: 4 }}>QR set on {formatLong(row.added_at.slice(0, 10))}</Text>
         </View>
         <Button label="Save or share" kind="outline" disabled={!canCopy} onPress={() => setSheet(true)} />
-        {row.last_copy_saved_at ? <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 13, color: t.muted, textAlign: 'center', marginTop: 8 }}>You saved a copy on {formatLong(row.last_copy_saved_at.slice(0, 10))}. Delete it after you pay.</Text> : null}
+        {row.last_copy_saved_at ? <Text style={{ fontFamily: 'Manrope_400', fontSize: 13, color: t.muted, textAlign: 'center', marginTop: 8 }}>You saved a copy on {formatLong(row.last_copy_saved_at.slice(0, 10))}. Delete it after you pay.</Text> : null}
         <View style={{ marginTop: 12 }}><Banner text="Open your payment app and upload this image. Wallets read QR codes from your gallery." /></View>
         {active.length > 1 ? (
           <View style={{ marginTop: 6 }}>
-            <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 14, color: t.text, marginBottom: 8 }}>After paying, log it on:</Text>
+            <Text style={{ fontFamily: 'Manrope_600', fontSize: 14, color: t.text, marginBottom: 8 }}>After paying, log it on:</Text>
             <View style={s.row}>{active.map((v) => <Chip key={v.debt.id} label={v.debt.title || v.debt.person_name} on={false} onPress={() => onLogPayment(v.debt.id)} />)}</View>
           </View>
         ) : null}
       </ScrollView>
       {active.length === 1 && active[0] ? (
         <View style={[s.save, { backgroundColor: t.bg, borderTopColor: t.border, paddingBottom: Math.max(insets.bottom, 12) }]}>
-          <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 13, color: t.muted, textAlign: 'center', marginBottom: 8 }}>After paying, log your payment in Patas.</Text>
+          <Text style={{ fontFamily: 'Manrope_400', fontSize: 13, color: t.muted, textAlign: 'center', marginBottom: 8 }}>After paying, log your payment in Patas.</Text>
           <Button label="Log payment" onPress={() => onLogPayment(active[0]!.debt.id)} />
         </View>
       ) : null}
@@ -370,7 +374,7 @@ export function QrShow({ id, userId, onBack, onEdit, onReplace, onRemoved, onLog
   function MenuItem({ label, onPress, danger }: { label: string; onPress: () => void; danger?: boolean }) {
     return (
       <Pressable accessibilityRole="button" onPress={onPress} style={{ paddingHorizontal: 16, paddingVertical: 14 }}>
-        <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 15, color: danger ? t.danger : t.text }}>{label}</Text>
+        <Text style={{ fontFamily: 'Manrope_600', fontSize: 15, color: danger ? t.danger : t.text }}>{label}</Text>
       </Pressable>
     );
   }
@@ -439,19 +443,19 @@ function CopySheet({ row, userId, stored, text, warn, onClose, onDone }: { row: 
     <Modal visible transparent animationType="fade" onRequestClose={onClose}>
       <View style={s.scrim}>
         <View accessibilityRole="alert" style={[s.dialog, { backgroundColor: t.surface, borderColor: t.border }]}>
-          <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 18, color: t.text }}>Save a copy of this QR?</Text>
-          <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 15, lineHeight: 21, color: t.muted, marginTop: 8 }}>
+          <Text style={{ fontFamily: 'Manrope_700', fontSize: 18, color: t.text }}>Save a copy of this QR?</Text>
+          <Text style={{ fontFamily: 'Manrope_400', fontSize: 15, lineHeight: 21, color: t.muted, marginTop: 8 }}>
             {"This copy leaves Patas: your MPIN won't lock it, signing out won't delete it, and your photo backup may upload it."}
           </Text>
           <View style={{ alignItems: 'center', marginVertical: 12 }}>
-            {ready ? React.createElement('img', { src: ready.url, alt: 'The copy that will be saved', style: { width: 150, height: 'auto', border: `1px solid ${t.border}`, borderRadius: 8 } }) : !error ? <Text style={{ fontFamily: 'Inter_500Medium', fontSize: 14, color: t.muted }}>Preparing copy…</Text> : null}
+            {ready ? React.createElement('img', { src: ready.url, alt: 'The copy that will be saved', style: { width: 150, height: 'auto', border: `1px solid ${t.border}`, borderRadius: 8 } }) : !error ? <Text style={{ fontFamily: 'Manrope_500', fontSize: 14, color: t.muted }}>Preparing copy…</Text> : null}
           </View>
           {warn ? <Banner tone="warn" text={warn} /> : null}
           {error ? <Banner tone="warn" text={error} /> : null}
           <View style={{ gap: 10, marginTop: 6 }}>
             {!iphone && canSave ? <Button label="Save to phone" disabled={!ready} onPress={save} /> : null}
             {canShare ? <Button label="Share…" kind={iphone ? 'primary' : 'outline'} disabled={!ready} onPress={share} /> : null}
-            {iphone && canShare ? <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 13, color: t.muted, textAlign: 'center' }}>Choose Save Image to put it in Photos.</Text> : null}
+            {iphone && canShare ? <Text style={{ fontFamily: 'Manrope_400', fontSize: 13, color: t.muted, textAlign: 'center' }}>Choose Save Image to put it in Photos.</Text> : null}
             {(iphone && !canShare && ready) || (!canSave && !canShare) ? <Banner text="This browser can't save the QR. You can take a screenshot instead." /> : null}
             <Button label="Cancel" kind="outline" onPress={onClose} />
           </View>
@@ -463,7 +467,7 @@ function CopySheet({ row, userId, stored, text, warn, onClose, onDone }: { row: 
 
 const s = StyleSheet.create({
   head: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingBottom: 8, gap: 8 },
-  title: { flex: 1, textAlign: 'center', fontFamily: 'Inter_700Bold', fontSize: 18 },
+  title: { flex: 1, textAlign: 'center', fontFamily: 'Manrope_700', fontSize: 18 },
   body: { paddingHorizontal: 16, width: '100%', maxWidth: 560, alignSelf: 'center' },
   row: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },

@@ -1,10 +1,13 @@
-import { useFonts } from 'expo-font';
 import { StatusBar } from 'expo-status-bar';
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { Platform, View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
+import { MoneyProvider } from './src/kit';
 import { PinGate } from './src/MpinScreens';
+import { Loading } from './src/Opening';
+import { ToastProvider } from './src/motion';
+import { PhotoProvider } from './src/photos';
 import { QrProvider } from './src/qrs';
 import { Shell } from './src/Shell';
 import { SignIn } from './src/SignIn';
@@ -12,14 +15,20 @@ import { useSession } from './src/session';
 import { SettingsProvider, useSettings } from './src/settings';
 import { StoreProvider } from './src/store';
 
-// Fonts come from assets/fonts, copied there on purpose: Vercel skips paths containing node_modules.
-const FONTS = {
-  Inter_400Regular: require('./assets/fonts/Inter_400Regular.ttf'),
-  Inter_500Medium: require('./assets/fonts/Inter_500Medium.ttf'),
-  Inter_600SemiBold: require('./assets/fonts/Inter_600SemiBold.ttf'),
-  Inter_700Bold: require('./assets/fonts/Inter_700Bold.ttf'),
-  Inter_800ExtraBold: require('./assets/fonts/Inter_800ExtraBold.ttf'),
-};
+// Round 4: Manrope (one variable font file, public/fonts, declared in index.html as Manrope_400 ... Manrope_700, each
+// face pinned to its weight). Wait for it briefly so numbers do not jump; never block the app on it.
+const FACES = ['400 16px Manrope_400', '500 16px Manrope_500', '600 16px Manrope_600', '700 16px Manrope_700'];
+function useFontsReady(): boolean {
+  const [ready, setReady] = useState(Platform.OS !== 'web' || typeof document === 'undefined' || !document.fonts);
+  useEffect(() => {
+    if (ready) return;
+    const done = () => setReady(true);
+    const timer = setTimeout(done, 2500); // a missing font must never leave a blank screen
+    void Promise.all(FACES.map((f) => document.fonts.load(f))).then(done, done);
+    return () => clearTimeout(timer);
+  }, [ready]);
+  return ready;
+}
 
 // Offline cold start: the service worker keeps a copy of the app's own files, never data.
 // Built app only, over https (or localhost for tests), never in dev.
@@ -37,18 +46,24 @@ if (
 
 function Root() {
   const { t, mode } = useSettings();
-  const [loaded, error] = useFonts(FONTS);
+  const fontsReady = useFontsReady();
   const session = useSession();
-  // Show the app even if a font fails: a fallback face is better than a blank screen.
-  if ((!loaded && !error) || session === undefined) return <View style={{ flex: 1, backgroundColor: t.bg }} />;
+  if (!fontsReady) return <View style={{ flex: 1, backgroundColor: t.bg }} />;
+  if (session === undefined) return <Loading />;
   return (
     <View style={{ flex: 1, backgroundColor: t.bg }}>
       {session ? (
         <StoreProvider key={session.user.id} userId={session.user.id}>
           <QrProvider userId={session.user.id}>
-            <PinGate userId={session.user.id}>
-              <Shell userId={session.user.id} />
-            </PinGate>
+            <PhotoProvider userId={session.user.id}>
+              <MoneyProvider>
+                <ToastProvider>
+                  <PinGate userId={session.user.id}>
+                    <Shell userId={session.user.id} />
+                  </PinGate>
+                </ToastProvider>
+              </MoneyProvider>
+            </PhotoProvider>
           </QrProvider>
         </StoreProvider>
       ) : (

@@ -87,8 +87,8 @@ export function DataSection() {
       <Text style={[s.h2, { color: t.text }]}>Your data</Text>
       <View style={[s.between, { marginBottom: 10 }]}>
         <View style={{ flex: 1, paddingRight: 10 }}>
-          <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 15, color: t.text }}>Include QR codes in backups</Text>
-          <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 13, color: t.muted }}>{withQr ? 'On for the next backup. The file will hold the QR pictures.' : 'Off. QR pictures stay out unless you turn this on.'}</Text>
+          <Text style={{ fontFamily: 'Manrope_600', fontSize: 15, color: t.text }}>Include QR codes in backups</Text>
+          <Text style={{ fontFamily: 'Manrope_400', fontSize: 13, color: t.muted }}>{withQr ? 'On for the next backup. The file will hold the QR pictures.' : 'Off. QR pictures stay out unless you turn this on.'}</Text>
         </View>
         <Toggle value={withQr} onValueChange={setWithQr} label="Include QR codes in backups" />
       </View>
@@ -115,9 +115,9 @@ export function DataSection() {
       <Modal visible={!!pending} transparent animationType="fade" onRequestClose={() => setPending(null)}>
         <View style={s.scrim}>
           <View accessibilityRole="alert" style={[s.dialog, { backgroundColor: t.surface, borderColor: t.border }]}>
-            <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 18, color: t.text }}>Restore this backup?</Text>
+            <Text style={{ fontFamily: 'Manrope_700', fontSize: 18, color: t.text }}>Restore this backup?</Text>
             {pending ? (
-              <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 15, lineHeight: 21, color: t.muted, marginTop: 8 }}>
+              <Text style={{ fontFamily: 'Manrope_400', fontSize: 15, lineHeight: 21, color: t.muted, marginTop: 8 }}>
                 {`Made ${pending.backup.made_at ? formatLong(pending.backup.made_at.slice(0, 10)) : 'on an unknown date'}: ${pending.backup.debts.length} debts, ${pending.backup.lines.length} payments and other lines, ${pending.backup.qrs.length} QR codes.`}
               </Text>
             ) : null}
@@ -125,7 +125,7 @@ export function DataSection() {
               <Chip label="Add what's missing" on={mode === 'add'} onPress={() => setMode('add')} />
               <Chip label="Replace everything" on={mode === 'replace'} onPress={() => setMode('replace')} />
             </View>
-            <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 13, lineHeight: 19, color: t.muted, marginTop: 8 }}>
+            <Text style={{ fontFamily: 'Manrope_400', fontSize: 13, lineHeight: 19, color: t.muted, marginTop: 8 }}>
               {mode === 'add' ? 'Debts you already have stay as they are. Only what this account lacks is added.' : 'Your account becomes exactly the backup. Debts that are not in it are deleted. Make a backup first if you may want them again.'}
             </Text>
             <View style={{ gap: 10, marginTop: 16 }}>
@@ -139,8 +139,8 @@ export function DataSection() {
       <Modal visible={csvOpen} transparent animationType="fade" onRequestClose={() => setCsvOpen(false)}>
         <View style={s.scrim}>
           <View style={[s.dialog, { backgroundColor: t.surface, borderColor: t.border }]}>
-            <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 18, color: t.text }}>Export CSV</Text>
-            <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 15, lineHeight: 21, color: t.muted, marginTop: 8 }}>Two files that open in Sheets or Excel. QR codes are never in them.</Text>
+            <Text style={{ fontFamily: 'Manrope_700', fontSize: 18, color: t.text }}>Export CSV</Text>
+            <Text style={{ fontFamily: 'Manrope_400', fontSize: 15, lineHeight: 21, color: t.muted, marginTop: 8 }}>Two files that open in Sheets or Excel. QR codes are never in them.</Text>
             <View style={{ gap: 10, marginTop: 16 }}>
               <Button label="Debts" onPress={() => downloadFile(`patas-debts-${today}.csv`, debtsCsv(views), 'text/csv')} />
               <Button label="Payments and other lines" onPress={() => downloadFile(`patas-payments-${today}.csv`, linesCsv(views), 'text/csv')} />
@@ -155,7 +155,7 @@ export function DataSection() {
 
 const s = StyleSheet.create({
   card: { borderRadius: 18, borderWidth: 1, padding: 14, marginBottom: 12 },
-  h2: { fontFamily: 'Inter_700Bold', fontSize: 17, marginBottom: 10 },
+  h2: { fontFamily: 'Manrope_700', fontSize: 17, marginBottom: 10 },
   row: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   between: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   scrim: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', alignItems: 'center', justifyContent: 'center', padding: 24 },

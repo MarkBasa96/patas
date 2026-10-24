@@ -1,10 +1,10 @@
-// Deletes the caller's whole account: their QR files, then the user (every row follows by cascade).
+// Deletes the caller's whole account: their QR and photo files, then the user (every row follows by cascade).
 // Rules (docs/SECURITY_DESIGN.md, "Who does what"):
 //  - the caller must be logged in (a valid access token), not anonymous;
 //  - the sign-in must be recent (last 10 minutes), so a stolen old session cannot wipe an account;
 //  - the body must say {"confirm":"DELETE"}, so a stray request cannot do it;
 //  - the service key is read from the function's own environment and never leaves it.
-import { createClient } from 'jsr:@supabase/supabase-js@2';
+import { createClient } from 'npm:@supabase/supabase-js@2.118.0'; // pinned, same as send-reminders (Kenshin L-6)
 
 const RECENT_MS = 10 * 60 * 1000;
 
@@ -43,13 +43,19 @@ Deno.serve(async (req) => {
   const last = user.last_sign_in_at ? Date.parse(user.last_sign_in_at) : 0;
   if (!last || Date.now() - last > RECENT_MS) return reply(403, { error: 'recent_login_required' });
 
-  // 1. The person's QR files, through the Storage API (deleting rows alone would leave the files behind).
-  for (let guard = 0; guard < 50; guard++) {
-    const { data: files, error: listErr } = await admin.storage.from('qr').list(user.id, { limit: 100 });
-    if (listErr) return reply(500, { error: 'could_not_list_files' });
-    if (!files || files.length === 0) break;
-    const { error: rmErr } = await admin.storage.from('qr').remove(files.map((f) => `${user.id}/${f.name}`));
-    if (rmErr) return reply(500, { error: 'could_not_remove_files' });
+  // 1. The person's QR and photo files, through the Storage API (rows cascade, files do not).
+  //    The user is deleted only once both folders are proven empty, so a failure here can be retried (Kenshin M-1).
+  for (const bucket of ['qr', 'photos'] as const) {
+    for (let guard = 0; guard < 50; guard++) {
+      const { data: files, error: listErr } = await admin.storage.from(bucket).list(user.id, { limit: 100 });
+      if (listErr) return reply(500, { error: 'could_not_list_files' });
+      if (!files || files.length === 0) break;
+      const { error: rmErr } = await admin.storage.from(bucket).remove(files.map((f) => `${user.id}/${f.name}`));
+      if (rmErr) return reply(500, { error: 'could_not_remove_files' });
+    }
+    // A remove that silently skipped something must not lead to deleting the user with files left behind.
+    const { data: left, error: leftErr } = await admin.storage.from(bucket).list(user.id, { limit: 1 });
+    if (leftErr || (left && left.length > 0)) return reply(500, { error: 'could_not_remove_files' });
   }
 
   // 2. The user. Every table points at auth.users with "on delete cascade", so all rows go with it.

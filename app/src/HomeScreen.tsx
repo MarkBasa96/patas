@@ -1,153 +1,321 @@
-import { LinearGradient } from 'expo-linear-gradient';
-import React, { useMemo, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+// Home (round 4): greeting by name, Total I owe, Due / Paid this month cards that open popups, the Overdue strip and
+// this month's cash flow. Home fits the screen it is on: spare height goes into the cards, a short screen tightens
+// spacing down to 0.55 (the approved mockup's fitHome).
+import React, { createElement, useMemo, useState } from 'react';
+import { Platform, ScrollView, StyleSheet, Text, View } from 'react-native';
 
-import { StateTag } from './DebtsScreen';
-import { cashRemaining, homeTotals, nextPayment } from './home';
-import { currencySymbol, formatPesos, parsePesosOrZero, pesosToInput } from './money';
-import { formatShort, todayIso } from './plan';
+import { coverOf, homeInsights, personKey, type DueRow } from './insights';
+import { Icon } from './icons';
+import { Bar, fLong, fMonth, fShort, Header, LinkBtn, ListCard, Pill, PersonAvatar, plural, Row, T, type as TY, useMoney } from './kit';
+import { formatMoney, parsePesosOrZero, pesosToInput } from './money';
+import { ConfirmPop, CountUp, Glass, Popup, Press, Sheet, useToast, Wash } from './motion';
+import { todayIso } from './plan';
 import { useSettings } from './settings';
 import { useStore } from './store';
-import { Avatar, Button, Field, fitFontSize, Input } from './ui';
+import { Button, Field, Input } from './ui';
 
-export function HomeScreen({ onAdd, onOpen, onTab, onLogPayment }: { onAdd: () => void; onOpen: (id: string) => void; onTab: (t: 'debts' | 'schedule' | 'reports') => void; onLogPayment: (id: string) => void }) {
+const greeting = () => { const h = new Date().getHours(); return h >= 5 && h < 12 ? 'Good morning' : h >= 12 && h < 18 ? 'Good afternoon' : 'Good evening'; };
+
+type Nav = { onOpen: (id: string) => void; onPerson: (key: string) => void; onTab: (t: 'debts' | 'schedule' | 'reports') => void; onOverdue: () => void; onEditLine: (debtId: string, lineId: string) => void; onSettings: () => void };
+
+export function HomeScreen(nav: Nav) {
   const { t } = useSettings();
-  const { views, cash, saveCash } = useStore();
+  const store = useStore();
+  const { conv, display, fmt, fmtSum } = useMoney();
   const today = todayIso();
-  const totals = useMemo(() => homeTotals(views, today), [views, today]);
-  const next = useMemo(() => nextPayment(views), [views]);
-  const left = cashRemaining(cash.income, cash.expenses, totals.paidThisMonth);
-  const [editing, setEditing] = useState(false);
-  const [inc, setInc] = useState('');
-  const [exp, setExp] = useState('');
-  const incN = parsePesosOrZero(inc);
-  const expN = parsePesosOrZero(exp);
-  // Big amounts shrink just enough to stay on one line (a 40-character name or a ₱1,234,567.89 total must never wrap).
-  const page = Math.min(useWindowDimensions().width, 560) - 32;
-  const heroSize = fitFontSize(formatPesos(totals.owed), 38, page - 36);
-  const tileSize = fitFontSize(formatPesos(Math.max(totals.dueThisMonth, totals.paidThisMonth)), 20, (page - 12) / 2 - 24);
+  const h = useMemo(() => homeInsights(store.views, store.months, today, conv, display), [store.views, store.months, today, conv, display]);
+  const first = (store.name || '').trim().split(/\s+/)[0] ?? '';
+  const [pop, setPop] = useState<null | 'due' | 'paid' | { debt: string; line: string } | 'cash'>(null);
+  const [k, setK] = useState(1);
+  const [box, setBox] = useState(0);
+  const hasCash = h.income > 0 || h.expenses > 0;
+  const duePct = h.dueThisMonth.total ? Math.round((h.dueThisMonthPaid.total * 100) / h.dueThisMonth.total) : 0;
+  const z = (n: number) => Math.round(n * k);
+  const approx = (sum: { approx: boolean }) => (n: number) => (sum.approx ? '≈ ' : '') + formatMoney(n, display);
 
   return (
-    <ScrollView style={{ flex: 1 }} contentContainerStyle={s.body}>
-      <Text style={[s.h1, { color: t.text }]}>Hi there</Text>
-      <Text style={{ fontFamily: 'Inter_500Medium', fontSize: 15, color: t.muted, marginBottom: 12 }}>{new Date().toLocaleString('en-US', { month: 'long', year: 'numeric' })}</Text>
+    <View style={{ flex: 1 }}>
+      <Wash />
+      <ScrollView
+        style={{ flex: 1 }}
+        onLayout={(e) => setBox(e.nativeEvent.layout.height)}
+        onContentSizeChange={(_w, ch) => { if (box && ch > box + 1 && k > 0.55) setK((x) => Math.max(0.55, Math.round((x - 0.05) * 100) / 100)); }}
+        contentContainerStyle={[s.page, { minHeight: box || undefined }]}
+      >
+        <Header greet title={`${greeting()}${first ? ', ' + first : ''}`} sub={fMonth(today.slice(0, 7))} onSettings={nav.onSettings} />
 
-      <Pressable accessibilityRole="button" accessibilityLabel={`Total I owe ${formatPesos(totals.owed)}`} onPress={() => onTab('debts')}>
-        <LinearGradient colors={[t.accentFill, t.mesh2]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={s.hero}>
-          <Text style={s.heroLab}>Total I owe</Text>
-          <Text style={[s.heroAmt, { fontSize: heroSize }]}>{formatPesos(totals.owed)}</Text>
-          <Text style={s.heroSub}>{totals.activeCount} active {totals.activeCount === 1 ? 'debt' : 'debts'}</Text>
-        </LinearGradient>
-      </Pressable>
+        <Press soft accessibilityRole="button" accessibilityLabel={`Total I owe ${fmtSum(h.owed)}, open My debts`} onPress={() => nav.onTab('debts')} style={[s.hero, { flexGrow: 3, paddingVertical: z(16), borderColor: t.dark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.6)' }, !t.dark && ({ boxShadow: `0 12px 32px -12px ${t.shadow}` } as object)]}>
+          <HeroMesh />
+          <View style={s.tap}><Icon name="right" size={18} color={t.muted} /></View>
+          <T v="meta" style={{ opacity: 0.82 }}>Total I owe</T>
+          <CountUp value={h.owed.total} k="home.owed" format={approx(h.owed)} style={[TY.hero, { color: t.text, fontSize: Math.round(40 * k), lineHeight: Math.round(44 * k), marginTop: 4, marginBottom: 2 }]} />
+          <T v="meta" style={{ opacity: 0.82 }}>{plural(h.activeCount, 'active debt')}</T>
+        </Press>
 
-      <View style={s.tiles}>
-        <Pressable accessibilityRole="button" onPress={() => onTab('schedule')} style={[s.tile, { backgroundColor: t.peachBg }]}>
-          <Text style={[s.tileLab, { color: t.text }]}>Due this month</Text>
-          <Text style={[s.tileAmt, { color: t.text, fontSize: tileSize }]}>{formatPesos(totals.dueThisMonth)}</Text>
-          <Text style={{ fontFamily: 'Inter_500Medium', fontSize: 12, color: t.peachInk }}>{formatPesos(totals.dueThisMonthPaid)} paid</Text>
-        </Pressable>
-        <Pressable accessibilityRole="button" onPress={() => onTab('reports')} style={[s.tile, { backgroundColor: t.mintBg }]}>
-          <Text style={[s.tileLab, { color: t.text }]}>Paid this month</Text>
-          <Text style={[s.tileAmt, { color: t.text, fontSize: tileSize }]}>{formatPesos(totals.paidThisMonth)}</Text>
-          <Text style={{ fontFamily: 'Inter_500Medium', fontSize: 12, color: t.mintInk }}>logged payments</Text>
-        </Pressable>
-      </View>
-      {totals.overdueCount > 0 ? (
-        <View style={[s.overdue, { backgroundColor: t.redBg }]}>
-          <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 14, color: t.danger }}>{totals.overdueCount} overdue · {formatPesos(totals.overdueAmount)}</Text>
+        <View style={[s.tiles, { flexGrow: 2, marginTop: z(12) }]}>
+          <Press soft accessibilityRole="button" accessibilityLabel="Due this month" onPress={() => setPop('due')} style={{ flex: 1 }}>
+            <Glass style={[s.tile, { paddingVertical: z(14) }]}>
+              <View style={s.tap}><Icon name="right" size={18} color={t.muted} /></View>
+              <T v="meta" tone="muted">Due this month</T>
+              <CountUp value={h.dueThisMonth.total} k="home.due" delay={60} format={approx(h.dueThisMonth)} style={[TY.card, { color: t.text, fontSize: Math.max(17, Math.round(22 * k)), marginTop: 4 }]} />
+              <T v="cap" tone="amber" style={{ marginTop: 4 }} lines={1}>{fmt(h.dueThisMonth.total - h.dueThisMonthPaid.total)} left</T>
+              <T v="cap" tone="muted" lines={1}>{fmt(h.dueThisMonthPaid.total)} paid</T>
+              <Bar pct={duePct} h={4} style={{ marginTop: 10 }} />
+            </Glass>
+          </Press>
+          <Press soft accessibilityRole="button" accessibilityLabel="Paid this month" onPress={() => setPop('paid')} style={{ flex: 1 }}>
+            <Glass style={[s.tile, { paddingVertical: z(14) }]}>
+              <View style={s.tap}><Icon name="right" size={18} color={t.muted} /></View>
+              <T v="meta" tone="muted">Paid this month</T>
+              <CountUp value={h.paidThisMonth.total} k="home.paid" delay={120} format={approx(h.paidThisMonth)} style={[TY.card, { color: t.text, fontSize: Math.max(17, Math.round(22 * k)), marginTop: 4 }]} />
+              <T v="cap" tone="ok" style={{ marginTop: 4 }}>{plural(h.paid.length, 'payment')}</T>
+            </Glass>
+          </Press>
         </View>
-      ) : null}
 
-      <View style={[s.card, { backgroundColor: t.surface, borderColor: t.border }]}>
-        <View style={s.between}>
-          <Text style={[s.h2, { color: t.text }]}>Monthly cash flow</Text>
-          <Pressable accessibilityRole="button" style={s.edit} onPress={() => { setInc(cash.income ? pesosToInput(cash.income) : ''); setExp(cash.expenses ? pesosToInput(cash.expenses) : ''); setEditing((e) => !e); }}>
-            <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 13, color: t.accent }}>{editing ? 'Close' : 'Edit'}</Text>
-          </Pressable>
-        </View>
-        {editing ? (
-          <View style={{ marginTop: 10 }}>
-            <Field label="Income this month" error={incN === null ? 'Enter an amount.' : undefined}>
-              <Input label="Income" value={inc} onChangeText={setInc} placeholder="0" keyboardType="decimal-pad" prefix={currencySymbol()} maxLength={16} />
-            </Field>
-            <Field label="Expenses this month" error={expN === null ? 'Enter an amount.' : undefined}>
-              <Input label="Expenses" value={exp} onChangeText={setExp} placeholder="0" keyboardType="decimal-pad" prefix={currencySymbol()} maxLength={16} />
-            </Field>
-            <Button label="Save" disabled={incN === null || expN === null} onPress={() => { if (incN !== null && expN !== null) { saveCash(incN, expN); setEditing(false); } }} />
-          </View>
-        ) : !cash.income && !cash.expenses ? (
-          // Nothing typed yet: a quiet prompt, never a red "−₱800" made of blank inputs (Erina, 2026-10-21).
-          <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 14, lineHeight: 20, color: t.muted, marginTop: 6 }}>
-            Add this month’s income and expenses to see what is left after debt payments.
-          </Text>
-        ) : (
-          <>
-            <Row label="Income" value={formatPesos(cash.income)} />
-            <Row label="Expenses" value={formatPesos(cash.expenses)} />
-            <Row label="Debt payments" value={formatPesos(totals.paidThisMonth)} />
-            <View style={[s.remain, { backgroundColor: t.accentSoft }]}>
-              <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 15, color: t.accent, flex: 1 }}>Cash remaining</Text>
-              <Text style={{ fontFamily: 'Inter_800ExtraBold', fontSize: 22, color: left < 0 ? t.text : t.accent }}>{formatPesos(left)}</Text>
-            </View>
-          </>
-        )}
-      </View>
+        {h.overdueCount > 0 ? (
+          <Press accessibilityRole="button" onPress={nav.onOverdue} style={[s.overdue, { backgroundColor: t.redBg, marginTop: z(12), minHeight: Math.max(44, z(48)) }]}>
+            <Icon name="alert" size={18} color={t.danger} />
+            <Text numberOfLines={1} style={[TY.row, { color: t.danger, flex: 1 }]}>Overdue · {plural(h.overdueCount, 'debt')} · {fmtSum(h.overdueAmount)}</Text>
+            <Icon name="right" size={18} color={t.danger} />
+          </Press>
+        ) : null}
 
-      <Text style={[s.h2, { color: t.text, marginTop: 14, marginBottom: 8 }]}>Next payment</Text>
-      {next && next.next ? (
-        <Pressable accessibilityRole="button" onPress={() => onOpen(next.debt.id)} style={[s.card, s.nextRow, { backgroundColor: t.surface, borderColor: t.border }]}>
-          <Avatar name={next.debt.person_name} />
-          <View style={{ flex: 1, minWidth: 0 }}>
-            <Text numberOfLines={1} style={{ fontFamily: 'Inter_700Bold', fontSize: 16, color: t.text }}>{next.debt.person_name}</Text>
-            <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 13, color: t.muted }}>{next.debt.kind === 'installments' ? 'Installment' : 'One-time'}</Text>
+        <Glass style={{ flexGrow: 3, marginTop: z(12), paddingVertical: z(16) }}>
+          <View style={s.between}>
+            <T v="sec">Monthly cash flow</T>
+            <LinkBtn label="Edit" onPress={() => setPop('cash')} />
           </View>
-          <View style={{ alignItems: 'flex-end', gap: 4 }}>
-            <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 17, color: t.text }}>{formatPesos(next.next.amount)}</Text>
-            <Text style={{ fontFamily: 'Inter_500Medium', fontSize: 13, color: next.state === 'overdue' ? t.danger : t.muted }}>{next.state === 'overdue' ? 'Overdue · ' : next.state === 'today' ? 'Due today · ' : 'Due '}{formatShort(next.next.date)}</Text>
-            <StateTag state={next.state} />
-          </View>
-        </Pressable>
-      ) : (
-        <View style={[s.card, { backgroundColor: t.surface, borderColor: t.border }]}>
-          <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 14, color: t.muted }}>{views.length ? 'You are all caught up. Nothing is due.' : 'Nothing due yet. Add your first debt to see it here.'}</Text>
-        </View>
-      )}
+          {hasCash ? (
+            <>
+              <View style={{ flexGrow: 1, justifyContent: 'space-evenly' }}>
+                <CashRow label="Income" value={h.income} k="home.inc" z={z} />
+                <CashRow label="Expenses" value={h.expenses} k="home.exp" z={z} />
+                <CashRow label="Debt payments" value={h.paidThisMonth.total} k="home.debtpay" z={z} />
+              </View>
+              <View style={[s.remain, { backgroundColor: t.accentSoft, marginTop: z(8), paddingVertical: z(10) }]}>
+                <T v="row" tone="accent">Cash remaining</T>
+                <CountUp value={h.cashRemaining} k="home.cash" delay={240} format={fmt} style={[TY.card, { color: t.accent, fontSize: Math.max(18, Math.round(24 * k)), flexShrink: 1 }]} />
+              </View>
+            </>
+          ) : (
+            <T v="body" tone="muted" style={{ marginTop: 8 }}>Add this month’s income and expenses to see what is left after debt payments.</T>
+          )}
+        </Glass>
+      </ScrollView>
 
-      <View style={s.buttons}>
-        <View style={{ flex: 1 }}><Button label="Add debt" onPress={onAdd} /></View>
-        <View style={{ flex: 1 }}><Button label="Log payment" kind="outline" disabled={!next} onPress={() => next && onLogPayment(next.debt.id)} /></View>
-      </View>
-    </ScrollView>
+      <DuePopup visible={pop === 'due'} rows={h.due} total={h.dueThisMonth} paid={h.dueThisMonthPaid} onClose={() => setPop(null)} onOpen={(id) => { setPop(null); nav.onOpen(id); }} onSchedule={() => { setPop(null); nav.onTab('schedule'); }} />
+      <PaidPopup
+        visible={pop === 'paid' || (typeof pop === 'object' && pop !== null)}
+        detail={typeof pop === 'object' && pop !== null ? pop : null}
+        h={h}
+        onClose={() => setPop(null)}
+        onBack={() => setPop('paid')}
+        onPick={(debt, line) => setPop({ debt, line })}
+        onOpen={(id) => { setPop(null); nav.onOpen(id); }}
+        onPerson={(key) => { setPop(null); nav.onPerson(key); }}
+        onEdit={(debt, line) => { setPop(null); nav.onEditLine(debt, line); }}
+      />
+      <CashSheet visible={pop === 'cash'} income={h.income} expenses={h.expenses} onClose={() => setPop(null)} />
+    </View>
   );
+}
 
-  function Row({ label, value }: { label: string; value: string }) {
-    return (
-      <View style={s.row}>
-        <Text style={{ fontFamily: 'Inter_500Medium', fontSize: 15, color: t.text, flex: 1 }}>{label}</Text>
-        <Text style={{ fontFamily: 'Inter_700Bold', fontSize: 15, color: t.text }}>{value}</Text>
+function CashRow({ label, value, k, z }: { label: string; value: number; k: string; z: (n: number) => number }) {
+  const { fmt } = useMoney();
+  const { t } = useSettings();
+  return (
+    <View style={[s.cashrow, { paddingVertical: z(7) }]}>
+      <T v="body" style={{ fontSize: 15 }}>{label}</T>
+      <CountUp value={value} k={k} delay={180} format={fmt} style={[TY.row, { color: t.text }]} />
+    </View>
+  );
+}
+
+/** The hero's soft mesh (the mockup's radial gradients, then a light tint so the text stays readable). */
+function HeroMesh() {
+  const { t } = useSettings();
+  if (Platform.OS !== 'web') return <View style={[StyleSheet.absoluteFill, { backgroundColor: t.accentSoft }]} />;
+  const mb3 = t.dark ? `${t.accent}59` : 'rgba(255,255,255,0.9)';
+  return createElement(
+    'div',
+    {
+      'aria-hidden': true,
+      style: {
+        position: 'absolute', inset: 0,
+        background: `radial-gradient(75% 95% at 0% 0%, ${t.heroA}, transparent 70%), radial-gradient(70% 90% at 100% 100%, ${t.heroB}, transparent 70%), radial-gradient(40% 55% at 92% 8%, ${mb3}, transparent 70%), ${t.heroBase}`,
+      },
+    },
+    createElement('div', { style: { position: 'absolute', inset: 0, background: t.dark ? 'rgba(27,26,37,0.30)' : 'rgba(255,255,255,0.60)' } }),
+  );
+}
+
+// ---------------- Due this month ----------------
+function DuePopup({ visible, rows, total, paid, onClose, onOpen, onSchedule }: { visible: boolean; rows: DueRow[]; total: { total: number; approx: boolean }; paid: { total: number; approx: boolean }; onClose: () => void; onOpen: (id: string) => void; onSchedule: () => void }) {
+  const { t } = useSettings();
+  const { fmt, fmtSum, fmtIn } = useMoney();
+  const [showPaid, setShowPaid] = useState(false);
+  const today = todayIso();
+  const left = rows.filter((x) => x.short > 0);
+  const done = rows.filter((x) => x.short === 0);
+  const late = (x: DueRow) => x.carried || x.due < today;
+  const order = [...left.filter(late), ...left.filter((x) => !late(x))];
+  const shown = order.slice(0, 8);
+  const carried = shown.filter((x) => x.carried);
+  const now = shown.filter((x) => !x.carried);
+  const months = [...new Set(carried.map((x) => x.due.slice(0, 7)))];
+  const pct = total.total ? Math.round((paid.total * 100) / total.total) : 0;
+  const row = (x: DueRow, isDone: boolean, i: number) => (
+    <Row key={`${x.view.debt.id}:${x.due}:${i}`} first={i === 0} onPress={() => onOpen(x.view.debt.id)} style={{ paddingHorizontal: 4 }} label={x.view.debt.person_name}>
+      {isDone ? (
+        <View style={[s.av36, { backgroundColor: t.accentSoft }]}><Icon name="check" size={18} color={t.accent} /></View>
+      ) : (
+        <PersonAvatar name={x.view.debt.person_name} size={36} />
+      )}
+      <View style={{ flex: 1, minWidth: 0 }}>
+        <T v="row" tone={isDone ? 'muted' : 'text'} lines={1}>{x.view.debt.person_name}</T>
+        <T v="meta" tone="muted" lines={1}>{x.charge ? 'Late fee · ' : x.view.debt.title ? `${x.view.debt.title} · ` : ''}{fShort(x.due)}</T>
       </View>
+      <View style={{ alignItems: 'flex-end' }}>
+        <T v="row" tone={isDone ? 'muted' : 'text'}>{fmtIn(isDone ? x.amount : x.short, x.view.debt.currency)}</T>
+        {!isDone && x.due < today ? <View style={{ marginTop: 4 }}><Pill state="overdue" /></View> : !isDone && x.short < x.amount ? <T v="cap" tone="muted" style={{ marginTop: 4 }}>{fmtIn(x.amount - x.short, x.view.debt.currency)} paid</T> : null}
+      </View>
+    </Row>
+  );
+  return (
+    <Popup visible={visible} onClose={onClose} title="Due this month">
+      <T v="pop">{fmtSum(total)}</T>
+      <T v="meta" tone="muted" style={{ marginTop: 4 }}>{fmt(paid.total)} paid · {left.length} of {rows.length} left{rows.some((x) => x.carried) ? ' · includes overdue from earlier months' : ''}</T>
+      <Bar pct={pct} h={4} style={{ marginTop: 10, marginBottom: 6 }} />
+      {months.map((m) => (
+        <View key={m}>
+          <T v="meta" tone="muted" style={s.mhead}>From {fMonth(m).split(' ')[0]}</T>
+          {carried.filter((x) => x.due.startsWith(m)).map((x, i) => row(x, false, i))}
+        </View>
+      ))}
+      {carried.length ? <T v="meta" tone="muted" style={s.mhead}>{fMonth(today.slice(0, 7)).split(' ')[0]}</T> : null}
+      {now.map((x, i) => row(x, false, i))}
+      {rows.length === 0 ? <T v="body" tone="muted" style={{ paddingVertical: 20, textAlign: 'center' }}>Nothing is due this month.</T> : null}
+      {order.length > 8 ? <LinkBtn label={`See all ${order.length} in Schedule`} onPress={onSchedule} /> : null}
+      {done.length ? (
+        <>
+          <LinkBtn label={`${showPaid ? 'Hide paid' : 'Paid'} (${done.length})`} onPress={() => setShowPaid((v) => !v)} />
+          {showPaid ? done.map((x, i) => row(x, true, i)) : null}
+        </>
+      ) : null}
+    </Popup>
+  );
+}
+
+// ---------------- Paid this month, and one payment's detail ----------------
+function PaidPopup({ visible, detail, h, onClose, onBack, onPick, onOpen, onPerson, onEdit }: {
+  visible: boolean; detail: { debt: string; line: string } | null; h: ReturnType<typeof homeInsights>; onClose: () => void; onBack: () => void;
+  onPick: (debt: string, line: string) => void; onOpen: (id: string) => void; onPerson: (key: string) => void; onEdit: (debt: string, line: string) => void;
+}) {
+  const { t } = useSettings();
+  const { fmtSum, fmtIn } = useMoney();
+  const store = useStore();
+  const toast = useToast();
+  const [ask, setAsk] = useState(false);
+  const today = todayIso();
+  const v = detail ? store.views.find((x) => x.debt.id === detail.debt) : undefined;
+  const line = v?.lines.find((l) => l.id === detail?.line);
+  if (detail && v && line) {
+    const cov = coverOf(v, line.id);
+    const cur = v.debt.currency;
+    return (
+      <Popup visible={visible} onClose={onClose} onBack={onBack} title="Payment">
+        <T v="pop">{fmtIn(line.amount_centavos, cur)}</T>
+        <T v="meta" tone="muted" style={{ marginTop: 4 }}>{fLong(line.on_date)}{line.method ? ` · ${line.method}` : ''}{line.note ? ` · ${line.note}` : ''}</T>
+        <T v="meta" tone="muted" style={{ marginTop: 16, fontFamily: 'Manrope_600' }}>What it paid</T>
+        <ListCard style={{ marginTop: 8, paddingHorizontal: 14, paddingVertical: 6 }}>
+          {cov.rows.length ? cov.rows.map((r) => (
+            <View key={r.seq} style={[s.between, { paddingVertical: 8 }]}>
+              <T v="meta">{v.debt.kind === 'one_time' ? 'Toward the balance' : `#${r.seq} · ${fShort(r.due)}`}</T>
+              <T v="meta">{fmtIn(r.amount, cur)}{r.amount < r.of ? <T v="meta" tone="muted"> of {fmtIn(r.of, cur)}</T> : null}</T>
+            </View>
+          )) : <T v="meta" tone="muted" style={{ paddingVertical: 8 }}>{v.debt.kind === 'one_time' ? 'Toward the balance' : 'Nothing was left to pay when it was logged.'}</T>}
+          {cov.extra > 0 ? <View style={[s.between, { paddingVertical: 8 }]}><T v="meta">Ahead / extra</T><T v="meta">{fmtIn(cov.extra, cur)}</T></View> : null}
+        </ListCard>
+        <ListCard style={{ marginTop: 12 }}>
+          <Row first onPress={() => onOpen(v.debt.id)}>
+            <Icon name="debts" color={t.muted} /><T v="row" lines={1} style={{ flex: 1 }}>Open debt{v.debt.title ? ` · ${v.debt.title}` : ''}</T><Icon name="right" size={18} color={t.muted} />
+          </Row>
+          <Row onPress={() => onPerson(personKey(v.debt.person_name))}>
+            <Icon name="hist" color={t.muted} /><T v="row" lines={1} style={{ flex: 1 }}>{v.debt.person_name}’s history</T><Icon name="right" size={18} color={t.muted} />
+          </Row>
+        </ListCard>
+        <View style={{ marginTop: 12 }}><Button kind="outline" label="Edit payment" onPress={() => onEdit(v.debt.id, line.id)} /></View>
+        <LinkBtn tone="danger" label="Delete payment" onPress={() => setAsk(true)} />
+        <ConfirmPop
+          visible={ask}
+          title="Delete this payment?"
+          body={`${fmtIn(line.amount_centavos, cur)} on ${fLong(line.on_date)} will be removed, and what is left on this debt goes back up.`}
+          action="Delete"
+          onCancel={() => setAsk(false)}
+          onConfirm={() => { setAsk(false); store.deleteLine(line.id); toast('Payment deleted', { quiet: true }); onBack(); }}
+        />
+      </Popup>
     );
   }
+  return (
+    <Popup visible={visible} onClose={onClose} title="Paid this month">
+      <T v="pop">{fmtSum(h.paidThisMonth)}</T>
+      <T v="meta" tone="muted" style={{ marginTop: 4 }}>{plural(h.paid.length, 'payment')} in {fMonth(today.slice(0, 7)).split(' ')[0]}</T>
+      <View style={{ marginTop: 12 }}>
+        {h.paid.length ? h.paid.map(({ view, line: l }, i) => (
+          <Row key={l.id} first={i === 0} onPress={() => onPick(view.debt.id, l.id)} style={{ paddingHorizontal: 4 }}>
+            <T v="meta" style={{ width: 48, fontFamily: 'Manrope_700' }}>{fShort(l.on_date)}</T>
+            <View style={{ flex: 1, minWidth: 0 }}>
+              <T v="row" lines={1}>{view.debt.person_name}</T>
+              <T v="meta" tone="muted" lines={1}>{view.debt.title}{l.method ? ` · ${l.method}` : ''}</T>
+            </View>
+            <T v="row">{fmtIn(l.amount_centavos, view.debt.currency)}</T>
+            <Icon name="right" size={18} color={t.muted} />
+          </Row>
+        )) : <T v="body" tone="muted" style={{ paddingVertical: 20, textAlign: 'center' }}>No payments logged this month yet.</T>}
+      </View>
+    </Popup>
+  );
+}
+
+// ---------------- this month's cash flow ----------------
+function CashSheet({ visible, income, expenses, onClose }: { visible: boolean; income: number; expenses: number; onClose: () => void }) {
+  const { display } = useMoney();
+  const store = useStore();
+  const toast = useToast();
+  const [inc, setInc] = useState<string | null>(null);
+  const [exp, setExp] = useState<string | null>(null);
+  const incS = inc ?? (income ? pesosToInput(income) : '');
+  const expS = exp ?? (expenses ? pesosToInput(expenses) : '');
+  const incN = parsePesosOrZero(incS);
+  const expN = parsePesosOrZero(expS);
+  const month = todayIso().slice(0, 7);
+  const close = () => { setInc(null); setExp(null); onClose(); };
+  return (
+    <Sheet visible={visible} onClose={close} title={`${fMonth(month).split(' ')[0]} cash flow`}>
+      <T v="meta" tone="muted" style={{ marginBottom: 12 }}>Kept month by month, so Reports can show how each month went.</T>
+      <Field label="Income this month" error={incN === null ? 'Enter an amount, for example 25000.' : undefined}>
+        <Input label="Income this month" value={incS} onChangeText={setInc} keyboardType="decimal-pad" placeholder="0.00" prefix={display === 'PHP' ? '₱' : display} />
+      </Field>
+      <Field label="Expenses this month" error={expN === null ? 'Enter an amount, for example 12000.' : undefined}>
+        <Input label="Expenses this month" value={expS} onChangeText={setExp} keyboardType="decimal-pad" placeholder="0.00" prefix={display === 'PHP' ? '₱' : display} />
+      </Field>
+      <Button label="Save" disabled={incN === null || expN === null} onPress={() => { if (incN === null || expN === null) return; store.saveCash(incN, expN, month); toast('Cash flow saved'); close(); }} />
+    </Sheet>
+  );
 }
 
 const s = StyleSheet.create({
-  body: { paddingHorizontal: 16, paddingBottom: 32, width: '100%', maxWidth: 560, alignSelf: 'center' },
-  h1: { fontFamily: 'Inter_800ExtraBold', fontSize: 26, letterSpacing: -0.3, marginTop: 6 },
-  h2: { fontFamily: 'Inter_700Bold', fontSize: 17 },
-  hero: { borderRadius: 20, paddingHorizontal: 18, paddingVertical: 16 },
-  heroLab: { fontFamily: 'Inter_500Medium', fontSize: 15, color: 'rgba(255,255,255,0.92)' },
-  heroAmt: { fontFamily: 'Inter_800ExtraBold', fontSize: 38, letterSpacing: -0.8, color: '#FFFFFF', marginVertical: 2 },
-  heroSub: { fontFamily: 'Inter_500Medium', fontSize: 15, color: 'rgba(255,255,255,0.92)' },
-  tiles: { flexDirection: 'row', gap: 12, marginTop: 12 },
-  tile: { flex: 1, borderRadius: 16, padding: 12, minHeight: 84 },
-  tileLab: { fontFamily: 'Inter_500Medium', fontSize: 12.5, opacity: 0.85 },
-  tileAmt: { fontFamily: 'Inter_700Bold', fontSize: 20, letterSpacing: -0.3, marginVertical: 2 },
-  overdue: { borderRadius: 12, paddingHorizontal: 12, paddingVertical: 9, marginTop: 10 },
-  card: { borderRadius: 18, borderWidth: 1, padding: 14, marginTop: 12 },
-  between: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  edit: { minHeight: 44, minWidth: 44, alignItems: 'flex-end', justifyContent: 'center', marginVertical: -12 }, // 44px to tap, without making the card taller
-  row:{ flexDirection: 'row', alignItems: 'center', paddingVertical: 7 },
-  remain: { flexDirection: 'row', alignItems: 'center', borderRadius: 12, paddingHorizontal: 12, paddingVertical: 10, marginTop: 8 },
-  nextRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 0 },
-  buttons: { flexDirection: 'row', gap: 12, marginTop: 16 },
+  page: { paddingHorizontal: 16, paddingBottom: 16, width: '100%', maxWidth: 560, alignSelf: 'center' },
+  hero: { borderRadius: 20, overflow: 'hidden', paddingHorizontal: 18, borderWidth: 1, justifyContent: 'center' },
+  tap: { position: 'absolute', top: 14, right: 12 },
+  tiles: { flexDirection: 'row', gap: 12 },
+  tile: { flex: 1, padding: 14 },
+  overdue: { flexDirection: 'row', alignItems: 'center', gap: 8, borderRadius: 14, paddingHorizontal: 14 },
+  between: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
+  cashrow: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between' },
+  remain: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderRadius: 12, paddingHorizontal: 12, gap: 8 },
+  mhead: { fontFamily: 'Manrope_600', marginTop: 14, marginBottom: 2 },
+  av36: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
 });
